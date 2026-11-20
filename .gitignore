@@ -1,0 +1,11 @@
+.godot/
+godot-4.7.2/
+build/
+export/
+*.ipa
+*.xcarchive
+*.p12
+*.mobileprovision
+*.provisionprofile
+*.p8
+

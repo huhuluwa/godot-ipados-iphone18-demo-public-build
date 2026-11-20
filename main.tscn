@@ -1,0 +1,138 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://Main.gd" id="1_main"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.071, 0.094, 0.149, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.176, 0.451, 0.831, 0.65)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+content_margin_left = 36.0
+content_margin_top = 36.0
+content_margin_right = 36.0
+content_margin_bottom = 36.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
+bg_color = Color(0.176, 0.451, 0.831, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+content_margin_left = 24.0
+content_margin_top = 16.0
+content_margin_right = 24.0
+content_margin_bottom = 16.0
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_main")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.035, 0.047, 0.078, 1)
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 42
+theme_override_constants/margin_top = 42
+theme_override_constants/margin_right = 42
+theme_override_constants/margin_bottom = 42
+
+[node name="Panel" type="PanelContainer" parent="Margin"]
+custom_minimum_size = Vector2(0, 520)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Content" type="VBoxContainer" parent="Margin/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 22
+
+[node name="Title" type="Label" parent="Margin/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.898, 0.949, 1, 1)
+theme_override_font_sizes/font_size = 34
+text = "Godot iOS Port Harness"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Margin/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.588, 0.698, 0.831, 1)
+theme_override_font_sizes/font_size = 20
+text = "iPadOS / iOS 触控与窗口适配验证"
+horizontal_alignment = 1
+
+[node name="CounterCaption" type="Label" parent="Margin/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.588, 0.698, 0.831, 1)
+theme_override_font_sizes/font_size = 18
+text = "触控次数"
+horizontal_alignment = 1
+
+[node name="Counter" type="Label" parent="Margin/Panel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.365, 0.761, 1, 1)
+theme_override_font_sizes/font_size = 86
+text = "0"
+horizontal_alignment = 1
+
+[node name="Actions" type="HBoxContainer" parent="Margin/Panel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="Tap" type="Button" parent="Margin/Panel/Content/Actions"]
+custom_minimum_size = Vector2(220, 76)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+text = "Tap +1"
+
+[node name="Reset" type="Button" parent="Margin/Panel/Content/Actions"]
+custom_minimum_size = Vector2(180, 76)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "重置"
+
+[node name="Status" type="Label" parent="Margin/Panel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.588, 0.698, 0.831, 1)
+theme_override_font_sizes/font_size = 18
+text = "准备就绪"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Footer" type="Label" parent="Margin/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.42, 0.478, 0.58, 1)
+theme_override_font_sizes/font_size = 16
+text = "目标设备：最新 iPad 与 iPhone Pro Max"
+horizontal_alignment = 1
+
+[connection signal="pressed" from="Margin/Panel/Content/Actions/Tap" to="." method="_on_tap_pressed"]
+[connection signal="pressed" from="Margin/Panel/Content/Actions/Reset" to="." method="_on_reset_pressed"]
+
