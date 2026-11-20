@@ -1,4 +1,6 @@
 .godot/
+*.import
+*.uid
 godot-4.7.2/
 build/
 export/

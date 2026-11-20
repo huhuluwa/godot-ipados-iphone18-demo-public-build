@@ -23,7 +23,9 @@ workflows:
           curl --fail --location --retry 3 \
             --output /tmp/templates.tpz \
             https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
-          unzip -q -o /tmp/templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
+          mkdir -p /tmp/godot-templates
+          unzip -q -o /tmp/templates.tpz -d /tmp/godot-templates
+          cp -R /tmp/godot-templates/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
       - name: Export Xcode project
         script: |
           set -euo pipefail
@@ -77,7 +79,9 @@ workflows:
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
           curl --fail --location --retry 3 --output /tmp/templates.tpz \
             https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
-          unzip -q -o /tmp/templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
+          mkdir -p /tmp/godot-templates
+          unzip -q -o /tmp/templates.tpz -d /tmp/godot-templates
+          cp -R /tmp/godot-templates/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
           "$GODOT_BIN" --headless --path "$CM_BUILD_DIR" --export-release "iOS" "$CM_BUILD_DIR/export/ios"
       - name: Set up iOS code signing
         script: xcode-project use-profiles
