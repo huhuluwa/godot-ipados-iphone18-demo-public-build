@@ -70,6 +70,12 @@ workflows:
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
             "$CM_BUILD_DIR/build/unsigned-ipa/Payload" \
             "$CM_BUILD_DIR/build/Godot-4.7.2-iPadOS-editor-unsigned.ipa"
+      - name: Verify editor IPA contents
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_editor_ipa.py" \
+            "$CM_BUILD_DIR/build/Godot-4.7.2-iPadOS-editor-unsigned.ipa" \
+            | tee "$CM_BUILD_DIR/ios-editor-ipa-verification.log"
     artifacts:
       - build/*.ipa
       - build/**/*.xcarchive
@@ -77,6 +83,7 @@ workflows:
       - godot-scons.log
       - xcode-project-list.log
       - xcodebuild-editor.log
+      - ios-editor-ipa-verification.log
     publishing:
       email:
         recipients:
