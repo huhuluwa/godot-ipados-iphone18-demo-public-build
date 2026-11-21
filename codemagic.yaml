@@ -34,7 +34,7 @@ workflows:
       - name: Build unsigned archive
         script: |
           set -euo pipefail
-          PROJECT=$(find "$CM_BUILD_DIR/export/ios" -maxdepth 2 -name '*.xcodeproj' -print -quit)
+          PROJECT=$(find "$CM_BUILD_DIR/export" -maxdepth 3 -name '*.xcodeproj' -print -quit)
           test -n "$PROJECT"
           mkdir -p "$CM_BUILD_DIR/build"
           LOG_DIR="$CM_BUILD_DIR/export/ios/diagnostics"
