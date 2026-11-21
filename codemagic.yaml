@@ -29,6 +29,7 @@ workflows:
       - name: Export Xcode project
         script: |
           set -euo pipefail
+          mkdir -p "$CM_BUILD_DIR/export/ios"
           "$GODOT_BIN" --headless --path "$CM_BUILD_DIR" --export-release "iOS" "$CM_BUILD_DIR/export/ios"
       - name: Build unsigned archive
         script: |
