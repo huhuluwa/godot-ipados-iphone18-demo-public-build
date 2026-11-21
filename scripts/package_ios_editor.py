@@ -50,6 +50,14 @@ def replace_template(root: Path) -> None:
         "$interface_orientations": "<string>UIInterfaceOrientationLandscapeLeft</string>\n<string>UIInterfaceOrientationLandscapeRight</string>\n<string>UIInterfaceOrientationPortrait</string>\n<string>UIInterfaceOrientationPortraitUpsideDown</string>",
         "$ipad_interface_orientations": "<string>UIInterfaceOrientationLandscapeLeft</string>\n<string>UIInterfaceOrientationLandscapeRight</string>\n<string>UIInterfaceOrientationPortrait</string>\n<string>UIInterfaceOrientationPortraitUpsideDown</string>",
         "$additional_plist_content": (
+            "<key>UTExportedTypeDeclarations</key>\n"
+            "<array><dict>\n"
+            "<key>UTTypeIdentifier</key><string>org.godotengine.godot-project</string>\n"
+            "<key>UTTypeDescription</key><string>Godot Project</string>\n"
+            "<key>UTTypeConformsTo</key><array><string>public.data</string></array>\n"
+            "<key>UTTypeTagSpecification</key><dict>\n"
+            "<key>public.filename-extension</key><array><string>godot</string></array>\n"
+            "</dict></dict></array>\n"
             "<key>CFBundleDocumentTypes</key>\n"
             "<array>\n"
             "<dict>\n"
