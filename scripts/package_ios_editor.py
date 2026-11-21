@@ -143,6 +143,11 @@ def rename_editor_app_directory(root: Path) -> None:
     if editor_app.exists():
         shutil.rmtree(editor_app)
     template_app.rename(editor_app)
+    template_plist = editor_app / "godot_apple_embedded-Info.plist"
+    editor_plist = editor_app / "GodotEditor-Info.plist"
+    if not template_plist.is_file():
+        raise FileNotFoundError("Generated Apple Embedded Info.plist")
+    template_plist.rename(editor_plist)
 
 
 def main() -> int:
