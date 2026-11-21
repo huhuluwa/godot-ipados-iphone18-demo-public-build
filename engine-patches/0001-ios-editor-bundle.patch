@@ -25,11 +25,68 @@ index 4e3ce1b..9dfb20d 100644
  	gargc = (int)[arguments count];
  	gargv = (char **)malloc(sizeof(char *) * gargc);
  	for (int i = 0; i < gargc; i++) {
+diff --git a/drivers/apple_embedded/os_apple_embedded.h b/drivers/apple_embedded/os_apple_embedded.h
+index d801a86..4aac04a 100644
+--- a/drivers/apple_embedded/os_apple_embedded.h
++++ b/drivers/apple_embedded/os_apple_embedded.h
+@@ -62,6 +62,7 @@ private:
+ #endif
+ 
+ 	MainLoop *main_loop = nullptr;
++	bool editor_restart_scheduled = false;
+ 
+ 	virtual void initialize_core() override;
+ 	virtual void initialize() override;
+diff --git a/drivers/apple_embedded/os_apple_embedded.mm b/drivers/apple_embedded/os_apple_embedded.mm
+index 84e4821..e345e12 100644
+--- a/drivers/apple_embedded/os_apple_embedded.mm
++++ b/drivers/apple_embedded/os_apple_embedded.mm
+@@ -59,6 +59,8 @@
+ 
+ #include <iterator>
+ 
++extern void apple_embedded_restart_async(int argc, char **argv);
++
+ #if defined(RD_ENABLED)
+ #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
+ 
+@@ -236,7 +238,30 @@ bool OS_AppleEmbedded::iterate() {
+ 	}
+ #endif
+ 
+-	return Main::iteration();
++	const bool should_quit = Main::iteration();
++	if (should_quit) {
++		const bool return_to_editor = OS::get_singleton()->get_environment("GODOT_IOS_EDITOR_RETURN") == "1";
++
++		if (return_to_editor && !editor_restart_scheduled) {
++			editor_restart_scheduled = true;
++			OS::get_singleton()->unset_environment("GODOT_IOS_EDITOR_RETURN");
++			Vector<String> restart_args;
++			restart_args.push_back(OS::get_singleton()->get_executable_path());
++			restart_args.push_back("--editor");
++			restart_args.push_back("--path");
++			restart_args.push_back(ProjectSettings::get_singleton()->get_resource_path());
++			Vector<CharString> encoded_args;
++			encoded_args.resize(restart_args.size());
++			Vector<char *> restart_argv;
++			restart_argv.resize(restart_args.size());
++			for (int i = 0; i < restart_args.size(); i++) {
++				encoded_args.write[i] = restart_args[i].utf8();
++				restart_argv.write[i] = encoded_args.write[i].ptrw();
++			}
++			apple_embedded_restart_async(restart_args.size(), restart_argv.ptrw());
++		}
++	}
++	return should_quit;
+ }
+ 
+ void OS_AppleEmbedded::start() {
 diff --git a/editor/project_manager/project_manager.cpp b/editor/project_manager/project_manager.cpp
-index 19cf085..a36108a 100644
+index 19cf085..407ba68 100644
 --- a/editor/project_manager/project_manager.cpp
 +++ b/editor/project_manager/project_manager.cpp
-@@ -82,6 +82,10 @@
+@@ -82,10 +82,34 @@
  
  #include "modules/modules_enabled.gen.h" // For gdscript, mono. (For editor help highlighter).
  
@@ -40,7 +97,62 @@ index 19cf085..a36108a 100644
  constexpr int GODOT4_CONFIG_VERSION = 5;
  
  ProjectManager *ProjectManager::singleton = nullptr;
-@@ -565,6 +569,13 @@ void ProjectManager::_open_selected_projects() {
+ 
++#ifdef IOS_ENABLED
++static void apple_embedded_restart_with_args(const List<String> &p_args) {
++	Vector<String> restart_args;
++	restart_args.push_back(OS::get_singleton()->get_executable_path());
++	for (const String &arg : p_args) {
++		restart_args.push_back(arg);
++	}
++
++	Vector<CharString> encoded_args;
++	encoded_args.resize(restart_args.size());
++	Vector<char *> restart_argv;
++	restart_argv.resize(restart_args.size());
++	for (int i = 0; i < restart_args.size(); i++) {
++		encoded_args.write[i] = restart_args[i].utf8();
++		restart_argv.write[i] = encoded_args.write[i].ptrw();
++	}
++	apple_embedded_restart_async(restart_args.size(), restart_argv.ptrw());
++}
++#endif
++
+ // Notifications.
+ 
+ void ProjectManager::_notification(int p_what) {
+@@ -477,11 +501,16 @@ void ProjectManager::_show_quick_settings() {
+ 
+ void ProjectManager::_restart_confirmed() {
+ 	List<String> args = OS::get_singleton()->get_cmdline_args();
++#ifdef IOS_ENABLED
++	apple_embedded_restart_with_args(args);
++	return;
++#else
+ 	Error err = OS::get_singleton()->create_instance(args);
+ 	ERR_FAIL_COND(err);
+ 
+ 	_dim_window();
+ 	get_tree()->quit();
++#endif
+ }
+ 
+ // Project list.
+@@ -554,8 +583,13 @@ void ProjectManager::_run_project_confirm() {
+ 		args.push_back("--path");
+ 		args.push_back(path);
+ 
++#ifdef IOS_ENABLED
++		apple_embedded_restart_with_args(args);
++		return;
++#else
+ 		Error err = OS::get_singleton()->create_instance(args);
+ 		ERR_FAIL_COND(err);
++#endif
+ 	}
+ }
+ 
+@@ -565,6 +599,13 @@ void ProjectManager::_open_selected_projects() {
  	loading_label->show();
  
  	const HashSet<String> &selected_list = project_list->get_selected_project_keys();
@@ -54,30 +166,17 @@ index 19cf085..a36108a 100644
  	for (const String &path : selected_list) {
  		String conf = path.path_join("project.godot");
  
-@@ -595,6 +606,22 @@ void ProjectManager::_open_selected_projects() {
+@@ -595,6 +636,9 @@ void ProjectManager::_open_selected_projects() {
  			args.push_back("--verbose");
  		}
  
 +#ifdef IOS_ENABLED
-+		Vector<String> restart_args;
-+		restart_args.push_back(OS::get_singleton()->get_executable_path());
-+		for (const String &arg : args) {
-+			restart_args.push_back(arg);
-+		}
-+		Vector<CharString> encoded_args;
-+		encoded_args.resize(restart_args.size());
-+		Vector<char *> restart_argv;
-+		restart_argv.resize(restart_args.size());
-+		for (int i = 0; i < restart_args.size(); i++) {
-+			encoded_args.write[i] = restart_args[i].utf8();
-+			restart_argv.write[i] = encoded_args.write[i].ptrw();
-+		}
-+		apple_embedded_restart_async(restart_args.size(), restart_argv.ptrw());
++	apple_embedded_restart_with_args(args);
 +#else
  		Error err = OS::get_singleton()->create_instance(args);
  		if (err != OK) {
  			loading_label->hide();
-@@ -602,8 +629,13 @@ void ProjectManager::_open_selected_projects() {
+@@ -602,8 +646,13 @@ void ProjectManager::_open_selected_projects() {
  			ERR_PRINT(vformat("Failed to start an editor instance for the project at '%s', error code %d.", path, err));
  			return;
  		}
@@ -91,6 +190,83 @@ index 19cf085..a36108a 100644
  	project_list->project_opening_initiated = true;
  
  	_dim_window();
+@@ -1202,8 +1251,13 @@ void ProjectManager::_perform_full_project_conversion() {
+ 	args.push_back("--rendering-driver");
+ 	args.push_back(OS::get_singleton()->get_current_rendering_driver_name());
+ 
++#ifdef IOS_ENABLED
++	apple_embedded_restart_with_args(args);
++	return;
++#else
+ 	Error err = OS::get_singleton()->create_instance(args);
+ 	ERR_FAIL_COND(err);
++#endif
+ 
+ 	project_list->set_project_version(path, GODOT4_CONFIG_VERSION);
+ }
+diff --git a/editor/run/editor_run.cpp b/editor/run/editor_run.cpp
+index 8399876..3a7c4ad 100644
+--- a/editor/run/editor_run.cpp
++++ b/editor/run/editor_run.cpp
+@@ -40,6 +40,10 @@
+ #include "main/main.h"
+ #include "servers/display/display_server.h"
+ 
++#ifdef IOS_ENABLED
++extern void apple_embedded_restart_async(int argc, char **argv);
++#endif
++
+ EditorRun::Status EditorRun::get_status() const {
+ 	return status;
+ }
+@@ -160,6 +164,47 @@ Error EditorRun::run(const String &p_scene, const String &p_write_movie, const V
+ 
+ 	String exec = OS::get_singleton()->get_executable_path();
+ 	int instance_count = RunInstancesDialog::get_singleton()->get_instance_count();
++
++#ifdef IOS_ENABLED
++	if (instance_count != 1) {
++		ERR_PRINT("iPadOS can run one project instance at a time.");
++		return ERR_UNAVAILABLE;
++	}
++
++	List<String> instance_args(args);
++	RunInstancesDialog::get_singleton()->get_argument_list_for_instance(0, instance_args);
++	RunInstancesDialog::get_singleton()->apply_custom_features(0);
++	if (instance_starting_callback) {
++		instance_starting_callback(0, instance_args);
++	}
++
++	// iPadOS does not provide a supported way to fork an editor child process.
++	// Restart the embedded engine into the project and return to the editor after
++	// the project exits. This keeps the run button functional without using fork.
++	OS::get_singleton()->set_environment("GODOT_IOS_EDITOR_RETURN", "1");
++	Vector<String> restart_args;
++	restart_args.push_back(exec);
++	for (const String &arg : instance_args) {
++		restart_args.push_back(arg);
++	}
++	Vector<CharString> encoded_args;
++	encoded_args.resize(restart_args.size());
++	Vector<char *> restart_argv;
++	restart_argv.resize(restart_args.size());
++	for (int i = 0; i < restart_args.size(); i++) {
++		encoded_args.write[i] = restart_args[i].utf8();
++		restart_argv.write[i] = encoded_args.write[i].ptrw();
++	}
++	apple_embedded_restart_async(restart_args.size(), restart_argv.ptrw());
++
++	status = STATUS_PLAY;
++	if (!p_scene.is_empty()) {
++		running_scene = p_scene;
++	}
++	OS::get_singleton()->unset_environment("GODOT_EDITOR_CUSTOM_FEATURES");
++	return OK;
++#endif
++
+ 	for (int i = 0; i < instance_count; i++) {
+ 		List<String> instance_args(args);
+ 		RunInstancesDialog::get_singleton()->get_argument_list_for_instance(i, instance_args);
 diff --git a/platform/ios/main_ios.mm b/platform/ios/main_ios.mm
 index 7d61b8a..bbab34b 100644
 --- a/platform/ios/main_ios.mm
