@@ -1,3 +1,30 @@
+diff --git a/drivers/apple_embedded/app_delegate_service.mm b/drivers/apple_embedded/app_delegate_service.mm
+index 4e3ce1b..9dfb20d 100644
+--- a/drivers/apple_embedded/app_delegate_service.mm
++++ b/drivers/apple_embedded/app_delegate_service.mm
+@@ -74,8 +74,20 @@ static GDTViewController *mainViewController = nil;
+ 	// TODO: logo screen is not displayed while shaders are compiling
+ 	// DummyViewController(Splash/LoadingViewController) -> setup -> GodotViewController
+ 
+-	// Fetch the command-line arguments from NSProcessInfo
+-	NSArray *arguments = [[NSProcessInfo processInfo] arguments];
++	// Fetch the command-line arguments from NSProcessInfo. When the app is
++	// opened from Files, pass the selected project to the editor in-process.
++	NSMutableArray *arguments = [[[NSProcessInfo processInfo] arguments] mutableCopy];
++	NSURL *launchURL = launchOptions[UIApplicationLaunchOptionsURLKey];
++	if (launchURL != nil && launchURL.isFileURL) {
++		[launchURL startAccessingSecurityScopedResource];
++		NSString *projectPath = launchURL.path;
++		if ([[projectPath pathExtension].lowercaseString isEqualToString:@"godot"]) {
++			projectPath = [projectPath stringByDeletingLastPathComponent];
++		}
++		if (projectPath.length > 0) {
++			[arguments addObjectsFromArray:@[ @"--editor", @"--path", projectPath ]];
++		}
++	}
+ 	gargc = (int)[arguments count];
+ 	gargv = (char **)malloc(sizeof(char *) * gargc);
+ 	for (int i = 0; i < gargc; i++) {
 diff --git a/platform_methods.py b/platform_methods.py
 index 7a702c0..0a2dfe9 100644
 --- a/platform_methods.py
