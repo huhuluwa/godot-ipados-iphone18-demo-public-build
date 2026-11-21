@@ -26,7 +26,7 @@ index 4e3ce1b..9dfb20d 100644
  	gargv = (char **)malloc(sizeof(char *) * gargc);
  	for (int i = 0; i < gargc; i++) {
 diff --git a/editor/project_manager/project_manager.cpp b/editor/project_manager/project_manager.cpp
-index 19cf085..a5e7c38 100644
+index 19cf085..a36108a 100644
 --- a/editor/project_manager/project_manager.cpp
 +++ b/editor/project_manager/project_manager.cpp
 @@ -82,6 +82,10 @@
@@ -70,7 +70,7 @@ index 19cf085..a5e7c38 100644
 +		restart_argv.resize(restart_args.size());
 +		for (int i = 0; i < restart_args.size(); i++) {
 +			encoded_args.write[i] = restart_args[i].utf8();
-+			restart_argv.write[i] = encoded_args[i].ptrw();
++			restart_argv.write[i] = encoded_args.write[i].ptrw();
 +		}
 +		apple_embedded_restart_async(restart_args.size(), restart_argv.ptrw());
 +#else
