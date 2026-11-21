@@ -25,6 +25,114 @@ index 4e3ce1b..9dfb20d 100644
  	gargc = (int)[arguments count];
  	gargv = (char **)malloc(sizeof(char *) * gargc);
  	for (int i = 0; i < gargc; i++) {
+diff --git a/editor/project_manager/project_manager.cpp b/editor/project_manager/project_manager.cpp
+index 19cf085..a5e7c38 100644
+--- a/editor/project_manager/project_manager.cpp
++++ b/editor/project_manager/project_manager.cpp
+@@ -82,6 +82,10 @@
+ 
+ #include "modules/modules_enabled.gen.h" // For gdscript, mono. (For editor help highlighter).
+ 
++#ifdef IOS_ENABLED
++extern void apple_embedded_restart_async(int argc, char **argv);
++#endif
++
+ constexpr int GODOT4_CONFIG_VERSION = 5;
+ 
+ ProjectManager *ProjectManager::singleton = nullptr;
+@@ -565,6 +569,13 @@ void ProjectManager::_open_selected_projects() {
+ 	loading_label->show();
+ 
+ 	const HashSet<String> &selected_list = project_list->get_selected_project_keys();
++#ifdef IOS_ENABLED
++	if (selected_list.size() > 1) {
++		loading_label->hide();
++		_show_error(TTRC("iPadOS can open one project at a time."));
++		return;
++	}
++#endif
+ 	for (const String &path : selected_list) {
+ 		String conf = path.path_join("project.godot");
+ 
+@@ -595,6 +606,22 @@ void ProjectManager::_open_selected_projects() {
+ 			args.push_back("--verbose");
+ 		}
+ 
++#ifdef IOS_ENABLED
++		Vector<String> restart_args;
++		restart_args.push_back(OS::get_singleton()->get_executable_path());
++		for (const String &arg : args) {
++			restart_args.push_back(arg);
++		}
++		Vector<CharString> encoded_args;
++		encoded_args.resize(restart_args.size());
++		Vector<char *> restart_argv;
++		restart_argv.resize(restart_args.size());
++		for (int i = 0; i < restart_args.size(); i++) {
++			encoded_args.write[i] = restart_args[i].utf8();
++			restart_argv.write[i] = encoded_args[i].ptrw();
++		}
++		apple_embedded_restart_async(restart_args.size(), restart_argv.ptrw());
++#else
+ 		Error err = OS::get_singleton()->create_instance(args);
+ 		if (err != OK) {
+ 			loading_label->hide();
+@@ -602,8 +629,13 @@ void ProjectManager::_open_selected_projects() {
+ 			ERR_PRINT(vformat("Failed to start an editor instance for the project at '%s', error code %d.", path, err));
+ 			return;
+ 		}
++#endif
+ 	}
+ 
++#ifdef IOS_ENABLED
++	loading_label->hide();
++	return;
++#endif
+ 	project_list->project_opening_initiated = true;
+ 
+ 	_dim_window();
+diff --git a/platform/ios/main_ios.mm b/platform/ios/main_ios.mm
+index 7d61b8a..bbab34b 100644
+--- a/platform/ios/main_ios.mm
++++ b/platform/ios/main_ios.mm
+@@ -36,6 +36,9 @@
+ #include "main/main.h"
+ 
+ #import <UIKit/UIKit.h>
++#import <Foundation/Foundation.h>
++
++#include <dispatch/dispatch.h>
+ 
+ #include <cstdio>
+ 
+@@ -78,3 +81,27 @@ void apple_embedded_finish() {
+ 	godot_cleanup_profiler();
+ 	delete os;
+ }
++
++void apple_embedded_restart_async(int argc, char **argv) {
++	NSMutableArray<NSString *> *arguments = [NSMutableArray arrayWithCapacity:argc];
++	for (int i = 0; i < argc; i++) {
++		[arguments addObject:[NSString stringWithUTF8String:argv[i]] ?: @""];
++	}
++	NSArray<NSString *> *restart_arguments = [arguments copy];
++	dispatch_async(dispatch_get_main_queue(), ^{
++		apple_embedded_finish();
++
++		int restart_argc = (int)restart_arguments.count;
++		char **restart_argv = (char **)malloc(sizeof(char *) * restart_argc);
++		for (int i = 0; i < restart_argc; i++) {
++			restart_argv[i] = strdup([restart_arguments[i] UTF8String]);
++		}
++
++		apple_embedded_main(restart_argc, restart_argv);
++
++		for (int i = 0; i < restart_argc; i++) {
++			free(restart_argv[i]);
++		}
++		free(restart_argv);
++	});
++}
 diff --git a/platform_methods.py b/platform_methods.py
 index 7a702c0..0a2dfe9 100644
 --- a/platform_methods.py
