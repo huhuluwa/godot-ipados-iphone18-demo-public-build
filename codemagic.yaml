@@ -37,16 +37,27 @@ workflows:
           PROJECT=$(find "$CM_BUILD_DIR/export/ios" -maxdepth 2 -name '*.xcodeproj' -print -quit)
           test -n "$PROJECT"
           mkdir -p "$CM_BUILD_DIR/build"
-          mkdir -p /tmp/xcodebuild_logs
-          xcodebuild -project "$PROJECT" -list 2>&1 | tee /tmp/xcodebuild_logs/project-list.log
-          LIST_STATUS=${PIPESTATUS[0]}
-          test "$LIST_STATUS" -eq 0
-          SCHEME=$(awk '/Schemes:/{capture=1; next} capture && /^[[:space:]]*[^[:space:]]/{sub(/^[[:space:]]+/, ""); print; exit}' /tmp/xcodebuild_logs/project-list.log)
-          test -n "$SCHEME"
-          echo "Using Xcode scheme: $SCHEME"
-          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+          mkdir -p "$CM_BUILD_DIR/build/xcodebuild_logs"
+          set +e
+          xcodebuild -project "$PROJECT" -list > "$CM_BUILD_DIR/build/xcodebuild_logs/project-list.log" 2>&1
+          LIST_STATUS=$?
+          set -e
+          cat "$CM_BUILD_DIR/build/xcodebuild_logs/project-list.log"
+          SCHEME=$(awk '/Schemes:/{capture=1; next} capture && /^[[:space:]]*[^[:space:]]/{sub(/^[[:space:]]+/, ""); print; exit}' "$CM_BUILD_DIR/build/xcodebuild_logs/project-list.log")
+          TARGET=$(awk '/Targets:/{capture=1; next} capture && /^[[:space:]]*[^[:space:]]/{sub(/^[[:space:]]+/, ""); print; exit}' "$CM_BUILD_DIR/build/xcodebuild_logs/project-list.log")
+          if [ -n "$SCHEME" ]; then
+            echo "Using Xcode scheme: $SCHEME"
+            BUILD_SELECTOR=(-scheme "$SCHEME")
+          elif [ -n "$TARGET" ]; then
+            echo "No shared scheme found, using Xcode target: $TARGET"
+            BUILD_SELECTOR=(-target "$TARGET")
+          else
+            echo "xcodebuild -list did not expose a scheme or target (status $LIST_STATUS)" >&2
+            exit 1
+          fi
+          xcodebuild -project "$PROJECT" "${BUILD_SELECTOR[@]}" -configuration Release \
             -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            -archivePath "$CM_BUILD_DIR/build/harness.xcarchive" archive 2>&1 | tee /tmp/xcodebuild_logs/archive.log
+            -archivePath "$CM_BUILD_DIR/build/harness.xcarchive" archive 2>&1 | tee "$CM_BUILD_DIR/build/xcodebuild_logs/archive.log"
       - name: Package unsigned IPA
         script: |
           set -euo pipefail
@@ -62,5 +73,5 @@ workflows:
       - build/*.ipa
       - export/ios/**/*
       - build/**/*.xcarchive
-      - /tmp/xcodebuild_logs/*.log
+      - build/xcodebuild_logs/*.log
 
