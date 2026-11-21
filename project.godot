@@ -17,7 +17,7 @@ size/viewport_height=1366
 size/window_width_override=768
 size/window_height_override=1024
 stretch/mode="canvas_items"
-handheld/orientation=1
+handheld/orientation=6
 
 [rendering]
 
