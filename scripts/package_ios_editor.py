@@ -49,7 +49,20 @@ def replace_template(root: Path) -> None:
         "$photolibrary_usage_description": "Godot Editor photo access",
         "$interface_orientations": "<string>UIInterfaceOrientationLandscapeLeft</string>\n<string>UIInterfaceOrientationLandscapeRight</string>\n<string>UIInterfaceOrientationPortrait</string>\n<string>UIInterfaceOrientationPortraitUpsideDown</string>",
         "$ipad_interface_orientations": "<string>UIInterfaceOrientationLandscapeLeft</string>\n<string>UIInterfaceOrientationLandscapeRight</string>\n<string>UIInterfaceOrientationPortrait</string>\n<string>UIInterfaceOrientationPortraitUpsideDown</string>",
-        "$additional_plist_content": "",
+        "$additional_plist_content": (
+            "<key>CFBundleDocumentTypes</key>\n"
+            "<array>\n"
+            "<dict>\n"
+            "<key>CFBundleTypeName</key><string>Godot Project</string>\n"
+            "<key>CFBundleTypeRole</key><string>Editor</string>\n"
+            "<key>LSItemContentTypes</key><array>"
+            "<string>org.godotengine.godot-project</string>"
+            "<string>public.folder</string>"
+            "</array>\n"
+            "<key>CFBundleTypeExtensions</key><array><string>godot</string></array>\n"
+            "</dict>\n"
+            "</array>"
+        ),
         "$required_device_capabilities": "<string>arm64</string>",
         "$signature": "GDOT",
         "$entitlements_full": "",
