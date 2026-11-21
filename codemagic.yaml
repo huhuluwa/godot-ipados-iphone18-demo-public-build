@@ -37,9 +37,16 @@ workflows:
           PROJECT=$(find "$CM_BUILD_DIR/export/ios" -maxdepth 2 -name '*.xcodeproj' -print -quit)
           test -n "$PROJECT"
           mkdir -p "$CM_BUILD_DIR/build"
-          xcodebuild -project "$PROJECT" -scheme "Godot iOS Port Harness" -configuration Release \
-            -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            -archivePath "$CM_BUILD_DIR/build/harness.xcarchive" archive
+          mkdir -p /tmp/xcodebuild_logs
+          xcodebuild -project "$PROJECT" -list 2>&1 | tee /tmp/xcodebuild_logs/project-list.log
+          LIST_STATUS=${PIPESTATUS[0]}
+          test "$LIST_STATUS" -eq 0
+          SCHEME=$(awk '/Schemes:/{capture=1; next} capture && /^[[:space:]]*[^[:space:]]/{sub(/^[[:space:]]+/, ""); print; exit}' /tmp/xcodebuild_logs/project-list.log)
+          test -n "$SCHEME"
+          echo "Using Xcode scheme: $SCHEME"
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+            -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -archivePath "$CM_BUILD_DIR/build/harness.xcarchive" archive 2>&1 | tee /tmp/xcodebuild_logs/archive.log
       - name: Package unsigned IPA
         script: |
           set -euo pipefail
