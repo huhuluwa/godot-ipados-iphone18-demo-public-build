@@ -126,6 +126,16 @@ def rename_editor_framework(root: Path) -> None:
             shutil.rmtree(framework)
 
 
+def rename_editor_app_directory(root: Path) -> None:
+    template_app = root / "godot_apple_embedded"
+    editor_app = root / "GodotEditor"
+    if not template_app.is_dir():
+        raise FileNotFoundError("Generated Apple Embedded app source directory")
+    if editor_app.exists():
+        shutil.rmtree(editor_app)
+    template_app.rename(editor_app)
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print(f"usage: {sys.argv[0]} TEMPLATE.zip OUTPUT_DIR", file=sys.stderr)
@@ -140,6 +150,7 @@ def main() -> int:
     with zipfile.ZipFile(template_zip) as archive:
         archive.extractall(output_dir)
     rename_editor_framework(output_dir)
+    rename_editor_app_directory(output_dir)
     replace_template(output_dir)
     pck = output_dir / "GodotEditor.pck"
     pck.touch()
