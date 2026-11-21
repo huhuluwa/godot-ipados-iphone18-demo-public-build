@@ -11,7 +11,7 @@ workflows:
           set -euo pipefail
           curl --fail --location --retry 3 \
             --output /tmp/godot.zip \
-            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_macos.universal.zip
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
           export GODOT_BIN="$(find /tmp/godot -type f -path '*Godot*.app/Contents/MacOS/Godot' -o -type f -name Godot | head -n 1)"
           test -x "$GODOT_BIN"
@@ -73,7 +73,7 @@ workflows:
         script: |
           set -euo pipefail
           curl --fail --location --retry 3 --output /tmp/godot.zip \
-            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_macos.universal.zip
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
           GODOT_BIN="$(find /tmp/godot -type f -path '*Godot*.app/Contents/MacOS/Godot' -o -type f -name Godot | head -n 1)"
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
