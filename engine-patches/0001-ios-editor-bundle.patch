@@ -1,0 +1,19 @@
+diff --git a/platform_methods.py b/platform_methods.py
+index 7a702c0..0a2dfe9 100644
+--- a/platform_methods.py
++++ b/platform_methods.py
+@@ -259,6 +259,14 @@ def generate_bundle_apple_embedded(platform, framework_dir, framework_dir_sim, u
+     app_prefix = "godot." + platform
+     rel_prefix = platform + "." + "template_release"
+     dbg_prefix = platform + "." + "template_debug"
++    if env["target"] == "editor":
++        # The iOS editor uses the same Xcode host as export templates, but its
++        # static library is built with TOOLS_ENABLED and has the editor target
++        # suffix. Copy it into both Xcode configurations so Release archives
++        # launch the editor too.
++        app_prefix += ".editor"
++        rel_prefix = platform + ".editor"
++        dbg_prefix = platform + ".editor"
+     if env.dev_build:
+         app_prefix += ".dev"
+         rel_prefix += ".dev"

@@ -11,3 +11,8 @@ export/
 *.provisionprofile
 *.p8
 
+.godot/
+godot-engine-source/
+xibbon-godot-4.7/
+xibbon-godot-master/
+scripts/__pycache__/

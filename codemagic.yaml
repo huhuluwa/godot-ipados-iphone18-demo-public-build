@@ -1,81 +1,73 @@
 workflows:
-  ios-unsigned-export:
-    name: Godot iOS unsigned IPA
+  ios-godot-editor-source-unsigned:
+    name: Godot 4.7.2 iOS/iPadOS editor source build
     instance_type: mac_mini_m2
-    max_build_duration: 30
+    max_build_duration: 120
     environment:
       xcode: latest
     scripts:
-      - name: Download Godot 4.7.2
+      - name: Fetch official Godot 4.7.2 source
         script: |
           set -euo pipefail
-          curl --fail --location --retry 3 \
-            --output /tmp/godot.zip \
-            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_macos.universal.zip
-          unzip -q /tmp/godot.zip -d /tmp/godot
-          export GODOT_BIN="$(find /tmp/godot -type f -path '*Godot*.app/Contents/MacOS/Godot' -o -type f -name Godot | head -n 1)"
-          test -x "$GODOT_BIN"
-          echo "GODOT_BIN=$GODOT_BIN" >> "$CM_ENV"
-      - name: Download export templates
+          ENGINE_DIR="$CM_BUILD_DIR/godot-engine"
+          git clone --depth 1 --branch 4.7.2-stable https://github.com/godotengine/godot.git "$ENGINE_DIR"
+          git -C "$ENGINE_DIR" rev-parse HEAD | tee "$CM_BUILD_DIR/godot-source-revision.txt"
+          git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0001-ios-editor-bundle.patch"
+      - name: Install SCons
         script: |
           set -euo pipefail
-          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable"
-          curl --fail --location --retry 3 \
-            --output /tmp/templates.tpz \
-            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
-          mkdir -p /tmp/godot-templates
-          unzip -q -o /tmp/templates.tpz -d /tmp/godot-templates
-          cp -R /tmp/godot-templates/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable/"
-      - name: Export Xcode project
+          python3 -m pip install --user --upgrade scons
+          USER_BASE="$(python3 -c 'import site; print(site.getuserbase())')"
+          export PATH="$USER_BASE/bin:$PATH"
+          scons --version
+          echo "PATH=$PATH" >> "$CM_ENV"
+      - name: Build editor library and Apple Embedded Xcode bundle
         script: |
           set -euo pipefail
-          mkdir -p "$CM_BUILD_DIR/export/ios"
-          "$GODOT_BIN" --headless --path "$CM_BUILD_DIR" --export-release "iOS" "$CM_BUILD_DIR/export/ios"
-      - name: Build unsigned archive
+          cd "$CM_BUILD_DIR/godot-engine"
+          scons --jobs="$(sysctl -n hw.ncpu)" \
+            platform=ios target=editor arch=arm64 \
+            generate_bundle=yes \
+            metal=yes vulkan=no opengl3=no \
+            tests=no module_mono_enabled=no dev_build=no \
+            2>&1 | tee "$CM_BUILD_DIR/godot-scons.log"
+          test -f bin/godot_ios_editor.zip
+      - name: Prepare unsigned iOS editor Xcode project
         script: |
           set -euo pipefail
-          PROJECT=$(find "$CM_BUILD_DIR/export" -maxdepth 3 -name '*.xcodeproj' -print -quit)
-          test -n "$PROJECT"
+          python3 "$CM_BUILD_DIR/scripts/package_ios_editor.py" \
+            "$CM_BUILD_DIR/godot-engine/bin/godot_ios_editor.zip" \
+            "$CM_BUILD_DIR/ios-editor-xcode"
+          test -f "$CM_BUILD_DIR/ios-editor-xcode/godot_apple_embedded.xcodeproj/project.pbxproj"
+          xcodebuild -project "$CM_BUILD_DIR/ios-editor-xcode/godot_apple_embedded.xcodeproj" -list \
+            2>&1 | tee "$CM_BUILD_DIR/xcode-project-list.log"
+      - name: Build unsigned iOS editor archive
+        script: |
+          set -euo pipefail
           mkdir -p "$CM_BUILD_DIR/build"
-          LOG_DIR="$CM_BUILD_DIR/export/ios/diagnostics"
-          mkdir -p "$LOG_DIR"
-          set +e
-          xcodebuild -project "$PROJECT" -list > "$LOG_DIR/project-list.log" 2>&1
-          LIST_STATUS=$?
-          set -e
-          cat "$LOG_DIR/project-list.log"
-          SCHEME=$(awk '/Schemes:/{capture=1; next} capture && /^[[:space:]]*[^[:space:]]/{sub(/^[[:space:]]+/, ""); print; exit}' "$LOG_DIR/project-list.log")
-          TARGET=$(awk '/Targets:/{capture=1; next} capture && /^[[:space:]]*[^[:space:]]/{sub(/^[[:space:]]+/, ""); print; exit}' "$LOG_DIR/project-list.log")
-          PROJECT_NAME=$(basename "$PROJECT" .xcodeproj)
-          TARGET=${TARGET:-$PROJECT_NAME}
-          if [ -n "$SCHEME" ]; then
-            echo "Using Xcode scheme: $SCHEME"
-            BUILD_SELECTOR=(-scheme "$SCHEME")
-          else
-            echo "No shared scheme found, using Xcode target: $TARGET"
-            BUILD_SELECTOR=(-target "$TARGET")
-          fi
-          set +e
-          xcodebuild -project "$PROJECT" "${BUILD_SELECTOR[@]}" -configuration Release \
-            -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            -archivePath "$CM_BUILD_DIR/build/harness.xcarchive" archive 2>&1 | tee "$LOG_DIR/archive.log"
-          ARCHIVE_STATUS=${PIPESTATUS[0]}
-          set -e
-          test "$ARCHIVE_STATUS" -eq 0
-      - name: Package unsigned IPA
+          xcodebuild \
+            -project "$CM_BUILD_DIR/ios-editor-xcode/godot_apple_embedded.xcodeproj" \
+            -scheme GodotEditor \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -archivePath "$CM_BUILD_DIR/build/GodotEditor.xcarchive" archive \
+            2>&1 | tee "$CM_BUILD_DIR/xcodebuild-editor.log"
+      - name: Package unsigned editor IPA
         script: |
           set -euo pipefail
-          APP=$(find "$CM_BUILD_DIR/build/harness.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+          APP=$(find "$CM_BUILD_DIR/build/GodotEditor.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$APP"
           rm -rf "$CM_BUILD_DIR/build/unsigned-ipa"
           mkdir -p "$CM_BUILD_DIR/build/unsigned-ipa/Payload"
           cp -R "$APP" "$CM_BUILD_DIR/build/unsigned-ipa/Payload/"
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
             "$CM_BUILD_DIR/build/unsigned-ipa/Payload" \
-            "$CM_BUILD_DIR/build/Godot-iOS-unsigned.ipa"
+            "$CM_BUILD_DIR/build/Godot-4.7.2-iPadOS-editor-unsigned.ipa"
     artifacts:
       - build/*.ipa
-      - export/ios/**/*
       - build/**/*.xcarchive
-      - build/xcodebuild_logs/*.log
-
+      - godot-source-revision.txt
+      - godot-scons.log
+      - xcode-project-list.log
+      - xcodebuild-editor.log
