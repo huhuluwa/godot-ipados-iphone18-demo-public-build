@@ -94,6 +94,15 @@ def replace_template(root: Path) -> None:
             continue
         for key, value in values.items():
             text = text.replace(key, value)
+        if path.name == "project.pbxproj":
+            # The upstream embedded template has no AppIcon asset set. An
+            # unsigned editor build can use the launch screen without one.
+            text = re.sub(
+                r"^\s*ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;\s*$\n?",
+                "",
+                text,
+                flags=re.MULTILINE,
+            )
         path.write_text(text, encoding="utf-8", newline="\n")
 
     leftovers = []
