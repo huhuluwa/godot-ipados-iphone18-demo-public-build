@@ -77,3 +77,10 @@ workflows:
       - godot-scons.log
       - xcode-project-list.log
       - xcodebuild-editor.log
+    publishing:
+      email:
+        recipients:
+          - zhengyi2323@gmail.com
+        notify:
+          success: true
+          failure: true
