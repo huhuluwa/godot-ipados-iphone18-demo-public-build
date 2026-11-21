@@ -10,7 +10,7 @@
 
 ## iOS 构建
 
-`export_presets.cfg` 中的 `AAAAAAAAAA` 是占位 Team ID。CI 构建前需要用 Apple Developer Team ID 替换它，并由 Codemagic 的签名集成提供证书与 provisioning profile。
+`export_presets.cfg` 中的 `AAAAAAAAAA` 只用于满足 Godot iOS 导出器的格式要求。它不是签名凭据，也不会连接 Apple Developer 账户。
 
-Codemagic 的免费个人计划提供每月 500 分钟 macOS M2 构建额度。真实设备可安装的 IPA 需要 Apple Developer Program 签名材料。
+Codemagic 流水线只构建未签名 Xcode 工程、未签名 `.xcarchive` 和未签名 `.ipa` 容器。未签名 `.ipa` 不能直接安装到 iPad 或 iPhone。
 
