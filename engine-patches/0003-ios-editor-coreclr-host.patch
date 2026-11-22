@@ -1,8 +1,8 @@
 diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
-index 8805ab6..25f5cd7 100644
+index 8805ab6..7fbc58d 100644
 --- a/modules/mono/mono_gd/gd_mono.cpp
 +++ b/modules/mono/mono_gd/gd_mono.cpp
-@@ -71,7 +71,7 @@ hostfxr_initialize_for_runtime_config_fn hostfxr_initialize_for_runtime_config =
+@@ -71,12 +71,15 @@ hostfxr_initialize_for_runtime_config_fn hostfxr_initialize_for_runtime_config =
  hostfxr_get_runtime_delegate_fn hostfxr_get_runtime_delegate = nullptr;
  hostfxr_close_fn hostfxr_close = nullptr;
  
@@ -10,8 +10,16 @@ index 8805ab6..25f5cd7 100644
 +#if !defined(TOOLS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
  typedef int(CORECLR_DELEGATE_CALLTYPE *coreclr_create_delegate_fn)(void *hostHandle, unsigned int domainId, const char *entryPointAssemblyName, const char *entryPointTypeName, const char *entryPointMethodName, void **delegate);
  typedef int(CORECLR_DELEGATE_CALLTYPE *coreclr_initialize_fn)(const char *exePath, const char *appDomainFriendlyName, int propertyCount, const char **propertyKeys, const char **propertyValues, void **hostHandle, unsigned int *domainId);
++typedef void(CORECLR_DELEGATE_CALLTYPE *coreclr_error_writer_callback_fn)(const char *message);
++typedef int(CORECLR_DELEGATE_CALLTYPE *coreclr_set_error_writer_fn)(coreclr_error_writer_callback_fn error_writer);
  
-@@ -235,7 +235,9 @@ String find_monosgen() {
+ coreclr_create_delegate_fn coreclr_create_delegate = nullptr;
+ coreclr_initialize_fn coreclr_initialize = nullptr;
++coreclr_set_error_writer_fn coreclr_set_error_writer = nullptr;
+ 
+ #ifdef ANDROID_ENABLED
+ mono_install_assembly_preload_hook_fn mono_install_assembly_preload_hook = nullptr;
+@@ -235,7 +238,9 @@ String find_monosgen() {
  	return String();
  #endif
  }
@@ -21,7 +29,7 @@ index 8805ab6..25f5cd7 100644
  String find_coreclr() {
  #if defined(WINDOWS_ENABLED)
  	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
-@@ -243,6 +245,10 @@ String find_coreclr() {
+@@ -243,6 +248,10 @@ String find_coreclr() {
  #elif defined(MACOS_ENABLED)
  	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
  								.path_join("libcoreclr.dylib");
@@ -32,7 +40,7 @@ index 8805ab6..25f5cd7 100644
  #elif defined(UNIX_ENABLED)
  	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
  								.path_join("libcoreclr.so");
-@@ -298,16 +304,18 @@ bool load_hostfxr(void *&r_hostfxr_dll_handle) {
+@@ -298,16 +307,18 @@ bool load_hostfxr(void *&r_hostfxr_dll_handle) {
  			hostfxr_close);
  }
  
@@ -52,11 +60,26 @@ index 8805ab6..25f5cd7 100644
  
  	if (coreclr_path.is_empty()) {
  		return false;
-@@ -608,6 +616,93 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
+@@ -334,6 +345,10 @@ bool load_coreclr(void *&r_coreclr_dll_handle) {
+ 	ERR_FAIL_COND_V(err != OK, false);
+ 	coreclr_create_delegate = (coreclr_create_delegate_fn)symbol;
+ 
++	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "coreclr_set_error_writer", symbol);
++	ERR_FAIL_COND_V(err != OK, false);
++	coreclr_set_error_writer = (coreclr_set_error_writer_fn)symbol;
++
+ #ifdef ANDROID_ENABLED
+ 	err = OS::get_singleton()->get_dynamic_library_symbol_handle(lib, "mono_install_assembly_preload_hook", symbol);
+ 	ERR_FAIL_COND_V(err != OK, false);
+@@ -608,6 +623,99 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
  }
  #endif
  
 +#if defined(TOOLS_ENABLED) && defined(APPLE_EMBEDDED_ENABLED)
++void coreclr_error_writer(const char *message) {
++	print_error(String(".NET CoreCLR: ") + String::utf8(message));
++}
++
 +godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins_for_editor(bool &r_runtime_initialized) {
 +	godot_plugins_initialize_fn godot_plugins_initialize = nullptr;
 +
@@ -126,7 +149,9 @@ index 8805ab6..25f5cd7 100644
 +	String executable_path = OS::get_singleton()->get_executable_path();
 +	ERR_FAIL_COND_V_MSG(executable_path.is_empty(), nullptr, ".NET: iOS editor executable path is unavailable");
 +	CharString executable_path_utf8 = executable_path.utf8();
++	coreclr_set_error_writer(coreclr_error_writer);
 +	int rc = coreclr_initialize(executable_path_utf8.get_data(), "GodotEditor", (int)(sizeof(property_keys) / sizeof(property_keys[0])), property_keys, property_values, &coreclr_handle, &domain_id);
++	coreclr_set_error_writer(nullptr);
 +	ERR_FAIL_COND_V_MSG(rc != 0, nullptr, ".NET: Failed to initialize CoreCLR on iOS editor");
 +
 +	r_runtime_initialized = true;
@@ -146,7 +171,7 @@ index 8805ab6..25f5cd7 100644
  } // namespace
  
  bool GDMono::should_initialize() {
-@@ -669,6 +757,13 @@ void GDMono::initialize() {
+@@ -669,6 +777,13 @@ void GDMono::initialize() {
  		if (godot_plugins_initialize == nullptr) {
  			ERR_FAIL_MSG(".NET: Failed to load hostfxr");
  		}
@@ -160,4 +185,3 @@ index 8805ab6..25f5cd7 100644
  #else
  
  		// Show a message box to the user to make the problem explicit (and explain a potential crash).
-
