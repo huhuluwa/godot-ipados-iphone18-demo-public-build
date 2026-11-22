@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import plistlib
+import struct
 import zipfile
 from pathlib import Path
 
@@ -42,6 +43,14 @@ REQUIRED_MANAGED_FILES = (
     "GodotSharp/Api/Debug/Microsoft.NETCore.App.runtimeconfig.json",
 )
 
+REQUIRED_CSHARP_TOOLCHAIN_FILES = (
+    "GodotSharp/Api/Release/GodotSharp.dll",
+    "GodotSharp/Api/Release/GodotSharpEditor.dll",
+    "GodotSharp/Tools/GodotTools.runtimeconfig.json",
+    "GodotSharp/Tools/Microsoft.CodeAnalysis.dll",
+    "GodotSharp/Tools/Microsoft.CodeAnalysis.CSharp.dll",
+)
+
 REQUIRED_CORECLR_FILES = (
     "Frameworks/libcoreclr.dylib",
     "Frameworks/libclrjit.dylib",
@@ -72,6 +81,10 @@ def verify(ipa_path: Path) -> dict[str, object]:
         missing_features = [symbol for symbol in IOS_FEATURE_SYMBOLS if symbol.encode() not in binary]
         if missing_features:
             raise RuntimeError(f"iOS feature symbols missing: {', '.join(missing_features)}")
+        if len(binary) < 8 or struct.unpack_from("<II", binary)[0] != 0xFEEDFACF:
+            raise RuntimeError("editor executable is not a 64-bit Mach-O binary")
+        if struct.unpack_from("<I", binary, 4)[0] != 0x0100000C:
+            raise RuntimeError("editor executable is not arm64")
         if f"{app}/_CodeSignature/CodeResources" in names:
             raise RuntimeError("artifact is signed; unsigned workflow expected")
         if set(info.get("UIDeviceFamily", [])) != {1, 2}:
@@ -79,6 +92,9 @@ def verify(ipa_path: Path) -> dict[str, object]:
         missing_managed = [f for f in REQUIRED_MANAGED_FILES if f"{app}/{f}" not in names]
         if missing_managed:
             raise RuntimeError(f"managed editor payload missing: {', '.join(missing_managed)}")
+        missing_toolchain = [f for f in REQUIRED_CSHARP_TOOLCHAIN_FILES if f"{app}/{f}" not in names]
+        if missing_toolchain:
+            raise RuntimeError(f"C# toolchain payload missing: {', '.join(missing_toolchain)}")
         missing_coreclr = [f for f in REQUIRED_CORECLR_FILES if f"{app}/{f}" not in names]
         if missing_coreclr:
             raise RuntimeError(f"CoreCLR runtime payload missing: {', '.join(missing_coreclr)}")
@@ -92,6 +108,7 @@ def verify(ipa_path: Path) -> dict[str, object]:
             "editor_symbols": list(REQUIRED_SYMBOLS),
             "ios_features": IOS_FEATURE_SYMBOLS,
             "managed_files": list(REQUIRED_MANAGED_FILES),
+            "csharp_toolchain_files": list(REQUIRED_CSHARP_TOOLCHAIN_FILES),
             "coreclr_files": list(REQUIRED_CORECLR_FILES),
             "signed": False,
         }
