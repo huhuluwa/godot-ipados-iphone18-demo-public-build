@@ -27,6 +27,19 @@ workflows:
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0001-ios-editor-bundle.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0002-ios-editor-mono-configure.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0003-ios-editor-coreclr-host.patch"
+          python3 - "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py" <<'PY'
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = '        if env["platform"] == "ios":\n            return\n'
+          if marker not in text:
+              needle = '    if env.editor_build:\n'
+              if needle not in text:
+                  raise SystemExit("iOS Mono editor guard insertion point not found")
+              text = text.replace(needle, needle + marker, 1)
+              path.write_text(text)
+          PY
           grep -n -A5 'if env.editor_build:' "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py"
       - name: Install SCons
         script: |
