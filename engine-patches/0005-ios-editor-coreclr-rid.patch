@@ -1,0 +1,13 @@
+diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
+--- a/modules/mono/mono_gd/gd_mono.cpp
++++ b/modules/mono/mono_gd/gd_mono.cpp
+@@ -659,5 +659,9 @@
+ 		native_root_utf8.get_data(),
+ 		managed_root_utf8.get_data(),
+ 		managed_root_utf8.get_data(),
++#if defined(IOS_SIMULATOR)
++		"iossimulator-arm64",
++#else
+ 		"ios-arm64",
++#endif
+ 	};

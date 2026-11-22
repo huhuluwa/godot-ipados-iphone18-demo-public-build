@@ -28,6 +28,7 @@ workflows:
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0002-ios-editor-mono-configure.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0003-ios-editor-coreclr-host.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0004-ios-editor-library-suffix.patch"
+          git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0005-ios-editor-coreclr-rid.patch"
           python3 - "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py" <<'PY'
           import sys
           from pathlib import Path
@@ -42,28 +43,6 @@ workflows:
               path.write_text(text)
           PY
           grep -n -A5 'if env.editor_build:' "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py"
-          python3 - "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp" <<'PY'
-          import re
-          import sys
-          from pathlib import Path
-          path = Path(sys.argv[1])
-          text = path.read_text()
-          if '"iossimulator-arm64",' not in text:
-              matches = list(re.finditer(r'(?m)^(?P<indent>[ \t]*)"ios-arm64",[ \t]*$', text))
-              if not matches:
-                  raise SystemExit("iOS CoreCLR RID insertion point not found")
-              match = matches[-1]
-              indent = match.group("indent")
-              replacement = (
-                  '#if defined(IOS_SIMULATOR)\n'
-                  + indent + '"iossimulator-arm64",\n'
-                  + '#else\n'
-                  + indent + '"ios-arm64",\n'
-                  + '#endif'
-              )
-              text = text[:match.start()] + replacement + text[match.end():]
-              path.write_text(text)
-          PY
           grep -n -A8 'iossimulator-arm64' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
       - name: Install SCons
         script: |
