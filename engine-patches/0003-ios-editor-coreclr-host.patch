@@ -102,7 +102,11 @@ index 8805ab6..25f5cd7 100644
 +		native_root_utf8.get_data(),
 +		managed_root_utf8.get_data(),
 +		managed_root_utf8.get_data(),
++#if defined(IOS_SIMULATOR)
++		"iossimulator-arm64",
++#else
 +		"ios-arm64",
++#endif
 +	};
 +
 +	void *coreclr_handle = nullptr;
