@@ -16,8 +16,14 @@ workflows:
         script: |
           set -euo pipefail
           ENGINE_DIR="$CM_BUILD_DIR/godot-engine"
-          git clone --depth 1 --branch 4.7.2-stable https://github.com/godotengine/godot.git "$ENGINE_DIR"
-          git -C "$ENGINE_DIR" rev-parse HEAD | tee "$CM_BUILD_DIR/godot-source-revision.txt"
+          SOURCE_TMP="$CM_BUILD_DIR/godot-source-tmp"
+          mkdir -p "$SOURCE_TMP"
+          curl --fail --location --retry 5 --retry-delay 3 \
+            "https://codeload.github.com/godotengine/godot/tar.gz/refs/tags/4.7.2-stable" \
+            --output "$SOURCE_TMP/godot-4.7.2-stable.tar.gz"
+          tar -xzf "$SOURCE_TMP/godot-4.7.2-stable.tar.gz" -C "$SOURCE_TMP"
+          mv "$SOURCE_TMP/godot-4.7.2-stable" "$ENGINE_DIR"
+          printf '%s\n' 'ed1daf0bf001b61586d9930840f2f1394092c079' | tee "$CM_BUILD_DIR/godot-source-revision.txt"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0001-ios-editor-bundle.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0002-ios-editor-mono-configure.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0003-ios-editor-coreclr-host.patch"
