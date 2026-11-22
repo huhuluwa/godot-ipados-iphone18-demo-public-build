@@ -39,12 +39,27 @@ workflows:
             tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
             2>&1 | tee "$CM_BUILD_DIR/godot-scons.log"
           test -f bin/godot_ios_editor.zip
+      - name: Build official Godot .NET assemblies
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/godot-engine"
+          dotnet --info 2>&1 | tee "$CM_BUILD_DIR/dotnet-info.log"
+          python3 modules/mono/build_scripts/build_assemblies.py \
+            --godot-output-dir bin \
+            --godot-platform ios \
+            2>&1 | tee "$CM_BUILD_DIR/godot-dotnet-build.log"
+          test -f bin/GodotSharp/Api/Debug/GodotSharp.dll
+          test -f bin/GodotSharp/Api/Debug/GodotSharpEditor.dll
+          test -f bin/GodotSharp/Api/Debug/GodotPlugins.dll
+          test -f bin/GodotSharp/Api/Debug/GodotPlugins.runtimeconfig.json
+          test -f bin/GodotSharp/Tools/GodotTools.dll
       - name: Prepare unsigned iOS editor Xcode project
         script: |
           set -euo pipefail
           python3 "$CM_BUILD_DIR/scripts/package_ios_editor.py" \
             "$CM_BUILD_DIR/godot-engine/bin/godot_ios_editor.zip" \
-            "$CM_BUILD_DIR/ios-editor-xcode"
+            "$CM_BUILD_DIR/ios-editor-xcode" \
+            "$CM_BUILD_DIR/godot-engine/bin"
           test -f "$CM_BUILD_DIR/ios-editor-xcode/godot_apple_embedded.xcodeproj/project.pbxproj"
           xcodebuild -project "$CM_BUILD_DIR/ios-editor-xcode/godot_apple_embedded.xcodeproj" -list \
             2>&1 | tee "$CM_BUILD_DIR/xcode-project-list.log"
@@ -83,6 +98,8 @@ workflows:
       - godot-source-revision.txt
       - godot-scons.log
       - xcode-project-list.log
+      - dotnet-info.log
+      - godot-dotnet-build.log
       - xcodebuild-editor.log
       - ios-editor-ipa-verification.log
     publishing:

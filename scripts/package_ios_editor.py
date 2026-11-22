@@ -171,9 +171,21 @@ def rename_editor_app_directory(root: Path) -> None:
     template_plist.rename(editor_plist)
 
 
+def copy_managed_editor_payload(root: Path, godot_output_dir: Path) -> None:
+    """Place the assemblies produced by Godot's official .NET build in the app."""
+    source = godot_output_dir / "GodotSharp"
+    if not source.is_dir():
+        raise FileNotFoundError(f"Generated GodotSharp output: {source}")
+
+    target = root / "GodotEditor" / "GodotSharp"
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(source, target)
+
+
 def main() -> int:
-    if len(sys.argv) != 3:
-        print(f"usage: {sys.argv[0]} TEMPLATE.zip OUTPUT_DIR", file=sys.stderr)
+    if len(sys.argv) not in {3, 4}:
+        print(f"usage: {sys.argv[0]} TEMPLATE.zip OUTPUT_DIR [GODOT_OUTPUT_DIR]", file=sys.stderr)
         return 2
     template_zip = Path(sys.argv[1]).resolve()
     output_dir = Path(sys.argv[2]).resolve()
@@ -186,6 +198,8 @@ def main() -> int:
         archive.extractall(output_dir)
     rename_editor_framework(output_dir)
     rename_editor_app_directory(output_dir)
+    if len(sys.argv) == 4:
+        copy_managed_editor_payload(output_dir, Path(sys.argv[3]).resolve())
     replace_template(output_dir)
     pck = output_dir / "GodotEditor.pck"
     pck.touch()

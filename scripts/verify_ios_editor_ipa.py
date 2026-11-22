@@ -31,6 +31,14 @@ IOS_FEATURE_SYMBOLS = {
     "TextServerFallback": "fallback text server",
 }
 
+REQUIRED_MANAGED_FILES = (
+    "GodotSharp/Api/Debug/GodotSharp.dll",
+    "GodotSharp/Api/Debug/GodotSharpEditor.dll",
+    "GodotSharp/Api/Debug/GodotPlugins.dll",
+    "GodotSharp/Api/Debug/GodotPlugins.runtimeconfig.json",
+    "GodotSharp/Tools/GodotTools.dll",
+)
+
 
 def verify(ipa_path: Path) -> dict[str, object]:
     with zipfile.ZipFile(ipa_path) as archive:
@@ -60,6 +68,9 @@ def verify(ipa_path: Path) -> dict[str, object]:
             raise RuntimeError("artifact is signed; unsigned workflow expected")
         if set(info.get("UIDeviceFamily", [])) != {1, 2}:
             raise RuntimeError(f"unexpected device family: {info.get('UIDeviceFamily')}")
+        missing_managed = [f for f in REQUIRED_MANAGED_FILES if f"{app}/{f}" not in names]
+        if missing_managed:
+            raise RuntimeError(f"managed editor payload missing: {', '.join(missing_managed)}")
 
         return {
             "bundle_identifier": info.get("CFBundleIdentifier"),
@@ -69,6 +80,7 @@ def verify(ipa_path: Path) -> dict[str, object]:
             "binary_bytes": len(binary),
             "editor_symbols": list(REQUIRED_SYMBOLS),
             "ios_features": IOS_FEATURE_SYMBOLS,
+            "managed_files": list(REQUIRED_MANAGED_FILES),
             "signed": False,
         }
 
