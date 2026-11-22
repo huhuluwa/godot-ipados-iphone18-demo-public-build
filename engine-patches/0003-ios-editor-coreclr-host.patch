@@ -52,7 +52,7 @@ index 8805ab6..25f5cd7 100644
  
  	if (coreclr_path.is_empty()) {
  		return false;
-@@ -608,6 +616,77 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
+@@ -608,6 +616,93 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
  }
  #endif
  
@@ -88,6 +88,8 @@ index 8805ab6..25f5cd7 100644
 +	CharString managed_root_utf8 = managed_root.utf8();
 +	CharString native_root_utf8 = native_root.utf8();
 +	CharString trusted_platform_assemblies_utf8 = trusted_platform_assemblies.utf8();
++	String runtime_deps_path = managed_root.path_join("Microsoft.NETCore.App.deps.json");
++	CharString runtime_deps_path_utf8 = runtime_deps_path.utf8();
 +	const char *property_keys[] = {
 +		"APP_PATHS",
 +		"TRUSTED_PLATFORM_ASSEMBLIES",
@@ -95,6 +97,11 @@ index 8805ab6..25f5cd7 100644
 +		"APP_CONTEXT_BASE_DIRECTORY",
 +		"SYSTEM_CORELIB_DIRECTORY",
 +		"RUNTIME_IDENTIFIER",
++		"APP_CONTEXT_DEPS_FILES",
++		"FX_DEPS_FILE",
++		"APP_NI_PATHS",
++		"PLATFORM_RESOURCE_ROOTS",
++		"AppDomainCompatSwitch",
 +	};
 +	const char *property_values[] = {
 +		managed_root_utf8.get_data(),
@@ -102,7 +109,16 @@ index 8805ab6..25f5cd7 100644
 +		native_root_utf8.get_data(),
 +		managed_root_utf8.get_data(),
 +		managed_root_utf8.get_data(),
++#if defined(IOS_SIMULATOR)
++		"iossimulator-arm64",
++#else
 +		"ios-arm64",
++#endif
++		runtime_deps_path_utf8.get_data(),
++		runtime_deps_path_utf8.get_data(),
++		managed_root_utf8.get_data(),
++		managed_root_utf8.get_data(),
++		"UseLatestBehaviorWhenTFMNotSpecified",
 +	};
 +
 +	void *coreclr_handle = nullptr;
@@ -130,7 +146,7 @@ index 8805ab6..25f5cd7 100644
  } // namespace
  
  bool GDMono::should_initialize() {
-@@ -669,6 +745,13 @@ void GDMono::initialize() {
+@@ -669,6 +757,13 @@ void GDMono::initialize() {
  		if (godot_plugins_initialize == nullptr) {
  			ERR_FAIL_MSG(".NET: Failed to load hostfxr");
  		}
@@ -144,3 +160,4 @@ index 8805ab6..25f5cd7 100644
  #else
  
  		// Show a message box to the user to make the problem explicit (and explain a potential crash).
+
