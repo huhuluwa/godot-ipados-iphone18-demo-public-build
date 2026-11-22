@@ -107,6 +107,15 @@ workflows:
           set -euo pipefail
           APP=$(find "$CM_BUILD_DIR/build/GodotEditor.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
           test -n "$APP"
+          MANAGED_SOURCE="$CM_BUILD_DIR/godot-engine/bin/GodotSharp"
+          test -d "$MANAGED_SOURCE"
+          rm -rf "$APP/GodotSharp"
+          cp -R "$MANAGED_SOURCE" "$APP/GodotSharp"
+          test -f "$APP/GodotSharp/Api/Debug/GodotSharp.dll"
+          test -f "$APP/GodotSharp/Api/Debug/GodotSharpEditor.dll"
+          test -f "$APP/GodotSharp/Api/Debug/GodotPlugins.dll"
+          test -f "$APP/GodotSharp/Api/Debug/GodotPlugins.runtimeconfig.json"
+          test -f "$APP/GodotSharp/Tools/GodotTools.dll"
           rm -rf "$CM_BUILD_DIR/build/unsigned-ipa"
           mkdir -p "$CM_BUILD_DIR/build/unsigned-ipa/Payload"
           cp -R "$APP" "$CM_BUILD_DIR/build/unsigned-ipa/Payload/"
