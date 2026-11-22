@@ -19,6 +19,7 @@ workflows:
           git clone --depth 1 --branch 4.7.2-stable https://github.com/godotengine/godot.git "$ENGINE_DIR"
           git -C "$ENGINE_DIR" rev-parse HEAD | tee "$CM_BUILD_DIR/godot-source-revision.txt"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0001-ios-editor-bundle.patch"
+          git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0002-ios-editor-mono-configure.patch"
       - name: Install SCons
         script: |
           set -euo pipefail
@@ -35,7 +36,7 @@ workflows:
             platform=ios target=editor arch=arm64 \
             generate_bundle=yes \
             metal=yes vulkan=no opengl3=no \
-            tests=no module_mono_enabled=no module_text_server_fb_enabled=yes dev_build=no \
+            tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
             2>&1 | tee "$CM_BUILD_DIR/godot-scons.log"
           test -f bin/godot_ios_editor.zip
       - name: Prepare unsigned iOS editor Xcode project
