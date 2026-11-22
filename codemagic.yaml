@@ -43,6 +43,18 @@ workflows:
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR/godot-engine"
+          DOTNET_DIR="$CM_BUILD_DIR/dotnet"
+          curl --fail --location --silent --show-error \
+            https://dot.net/v1/dotnet-install.sh \
+            --output "$CM_BUILD_DIR/dotnet-install.sh"
+          bash "$CM_BUILD_DIR/dotnet-install.sh" \
+            --channel 8.0 \
+            --quality ga \
+            --architecture arm64 \
+            --install-dir "$DOTNET_DIR" \
+            --no-path
+          export PATH="$DOTNET_DIR:$PATH"
+          echo "PATH=$PATH" >> "$CM_ENV"
           dotnet --info 2>&1 | tee "$CM_BUILD_DIR/dotnet-info.log"
           python3 modules/mono/build_scripts/build_assemblies.py \
             --godot-output-dir bin \
