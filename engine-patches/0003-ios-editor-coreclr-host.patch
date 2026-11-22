@@ -1,5 +1,5 @@
 diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
-index 8805ab6..79b977b 100644
+index 8805ab6..a35a8d8 100644
 --- a/modules/mono/mono_gd/gd_mono.cpp
 +++ b/modules/mono/mono_gd/gd_mono.cpp
 @@ -71,7 +71,7 @@ hostfxr_initialize_for_runtime_config_fn hostfxr_initialize_for_runtime_config =
@@ -32,7 +32,7 @@ index 8805ab6..79b977b 100644
  #elif defined(UNIX_ENABLED)
  	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
  								.path_join("libcoreclr.so");
-@@ -298,7 +304,7 @@ bool load_hostfxr(void *&r_hostfxr_dll_handle) {
+@@ -298,16 +304,18 @@ bool load_hostfxr(void *&r_hostfxr_dll_handle) {
  			hostfxr_close);
  }
  
@@ -41,7 +41,18 @@ index 8805ab6..79b977b 100644
  bool load_coreclr(void *&r_coreclr_dll_handle) {
  	String coreclr_path = find_coreclr();
  
-@@ -608,6 +614,74 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
+ 	bool is_monovm = false;
++#ifndef TOOLS_ENABLED
+ 	if (coreclr_path.is_empty()) {
+ 		// Fallback to MonoVM (should have the same API as CoreCLR).
+ 		coreclr_path = find_monosgen();
+ 		is_monovm = true;
+ 	}
++#endif
+ 
+ 	if (coreclr_path.is_empty()) {
+ 		return false;
+@@ -608,6 +616,74 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
  }
  #endif
  
@@ -116,7 +127,7 @@ index 8805ab6..79b977b 100644
  } // namespace
  
  bool GDMono::should_initialize() {
-@@ -669,6 +743,13 @@ void GDMono::initialize() {
+@@ -669,6 +745,13 @@ void GDMono::initialize() {
  		if (godot_plugins_initialize == nullptr) {
  			ERR_FAIL_MSG(".NET: Failed to load hostfxr");
  		}
