@@ -24,11 +24,23 @@ workflows:
           tar -xzf "$SOURCE_TMP/godot-4.7.2-stable.tar.gz" -C "$SOURCE_TMP"
           mv "$SOURCE_TMP/godot-4.7.2-stable" "$ENGINE_DIR"
           printf '%s\n' 'ed1daf0bf001b61586d9930840f2f1394092c079' | tee "$CM_BUILD_DIR/godot-source-revision.txt"
-          git apply --directory="$ENGINE_DIR" --unsafe-paths "$CM_BUILD_DIR/engine-patches/0001-ios-editor-bundle.patch"
-          git apply --directory="$ENGINE_DIR" --unsafe-paths "$CM_BUILD_DIR/engine-patches/0002-ios-editor-mono-configure.patch"
-          git apply --directory="$ENGINE_DIR" --unsafe-paths "$CM_BUILD_DIR/engine-patches/0003-ios-editor-coreclr-host.patch"
-          git apply --directory="$ENGINE_DIR" --unsafe-paths "$CM_BUILD_DIR/engine-patches/0004-ios-editor-library-suffix.patch"
-          git apply --directory="$ENGINE_DIR" --unsafe-paths "$CM_BUILD_DIR/engine-patches/0005-ios-editor-coreclr-rid.patch"
+          # The official source archive has no Git worktree. Seed only the files
+          # touched by our patches so git apply cannot silently skip them.
+          git init -q "$ENGINE_DIR"
+          git -C "$ENGINE_DIR" add \
+            drivers/apple_embedded/app_delegate_service.mm \
+            drivers/apple_embedded/os_apple_embedded.h \
+            drivers/apple_embedded/os_apple_embedded.mm \
+            editor/project_manager/project_manager.cpp \
+            editor/run/editor_run.cpp \
+            platform/ios/main_ios.mm \
+            platform_methods.py \
+            modules/mono/build_scripts/mono_configure.py \
+            modules/mono/mono_gd/gd_mono.cpp
+          for PATCH_FILE in "$CM_BUILD_DIR"/engine-patches/*.patch; do
+            git -C "$ENGINE_DIR" apply --index --check "$PATCH_FILE"
+            git -C "$ENGINE_DIR" apply --index "$PATCH_FILE"
+          done
           python3 - "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py" <<'PY'
           import sys
           from pathlib import Path
@@ -44,6 +56,7 @@ workflows:
           PY
           grep -n -A5 'if env.editor_build:' "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py"
           grep -n -A8 'iossimulator-arm64' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
+          grep -n 'CoreCLR initialized for iOS editor' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
       - name: Install SCons
         script: |
           set -euo pipefail
