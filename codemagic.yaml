@@ -27,6 +27,7 @@ workflows:
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0001-ios-editor-bundle.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0002-ios-editor-mono-configure.patch"
           git -C "$ENGINE_DIR" apply "$CM_BUILD_DIR/engine-patches/0003-ios-editor-coreclr-host.patch"
+          grep -n -A5 'if env.editor_build:' "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py"
       - name: Install SCons
         script: |
           set -euo pipefail
