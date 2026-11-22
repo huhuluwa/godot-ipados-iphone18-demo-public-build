@@ -47,12 +47,26 @@ workflows:
           from pathlib import Path
           path = Path(sys.argv[1])
           text = path.read_text()
-          marker = '#if defined(IOS_SIMULATOR)\n\t\t"iossimulator-arm64",\n#else\n\t\t"ios-arm64",\n#endif'
+          marker = '"iossimulator-arm64",'
           if marker not in text:
-              needle = '\t\t"ios-arm64",\n'
-              if needle not in text:
+              needle = '"ios-arm64",'
+              start = text.find('"RUNTIME_IDENTIFIER"')
+              position = text.find(needle, start)
+              if start < 0 or position < 0:
                   raise SystemExit("iOS CoreCLR RID insertion point not found")
-              text = text.replace(needle, marker + '\n', 1)
+              line_start = text.rfind("\n", 0, position) + 1
+              line_end = text.find("\n", position)
+              if line_end < 0:
+                  line_end = len(text)
+              indent = text[line_start:position]
+              replacement = (
+                  '#if defined(IOS_SIMULATOR)\n'
+                  + indent + '"iossimulator-arm64",\n'
+                  + '#else\n'
+                  + indent + '"ios-arm64",\n'
+                  + '#endif'
+              )
+              text = text[:line_start] + replacement + text[line_end:]
               path.write_text(text)
           PY
           grep -n -A8 'iossimulator-arm64' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
