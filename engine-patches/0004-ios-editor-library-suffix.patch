@@ -1,8 +1,6 @@
-diff --git a/platform_methods.py b/platform_methods.py
-index 7a702c0..f71b5e6 100644
 --- a/platform_methods.py
 +++ b/platform_methods.py
-@@ -182,12 +182,28 @@ def lipo_and_copy_apple_embedded(
+@@ -182,12 +182,36 @@
      # env.extra_suffix contains ".simulator" when building for simulator,
      # but it's undesired when calling lipo()
      extra_suffix = env.extra_suffix.replace(".simulator", "")
@@ -19,7 +17,15 @@ index 7a702c0..f71b5e6 100644
 +        if target_bin:
 +            return target_bin
 +        candidates = sorted(Path(bin_dir).glob(Path(prefix).name + ".*" + suffix))
-+        return str(candidates[0]) if candidates else ""
++        if candidates:
++            return str(candidates[0])
++        candidates = sorted(Path(bin_dir).glob("libgodot" + module_prefix + "." + platform + ".*.a"))
++        want_simulator = ".simulator" in suffix
++        for candidate in candidates:
++            is_simulator = ".simulator." in candidate.name
++            if is_simulator == want_simulator:
++                return str(candidate)
++        return ""
 +
 +    rel_target_bin = find_target(
 +        bin_dir + "/libgodot" + module_prefix + "." + rel_prefix, extra_suffix + ".a"
