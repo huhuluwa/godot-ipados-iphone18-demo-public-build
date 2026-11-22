@@ -1,5 +1,5 @@
 diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
-index 8805ab6..a35a8d8 100644
+index 8805ab6..25f5cd7 100644
 --- a/modules/mono/mono_gd/gd_mono.cpp
 +++ b/modules/mono/mono_gd/gd_mono.cpp
 @@ -71,7 +71,7 @@ hostfxr_initialize_for_runtime_config_fn hostfxr_initialize_for_runtime_config =
@@ -52,7 +52,7 @@ index 8805ab6..a35a8d8 100644
  
  	if (coreclr_path.is_empty()) {
  		return false;
-@@ -608,6 +616,74 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
+@@ -608,6 +616,77 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
  }
  #endif
  
@@ -88,9 +88,6 @@ index 8805ab6..a35a8d8 100644
 +	CharString managed_root_utf8 = managed_root.utf8();
 +	CharString native_root_utf8 = native_root.utf8();
 +	CharString trusted_platform_assemblies_utf8 = trusted_platform_assemblies.utf8();
-+	String executable_path = OS::get_singleton()->get_executable_path();
-+	ERR_FAIL_COND_V_MSG(executable_path.is_empty(), nullptr, ".NET: iOS editor executable path is unavailable");
-+	CharString executable_path_utf8 = executable_path.utf8();
 +	const char *property_keys[] = {
 +		"APP_PATHS",
 +		"TRUSTED_PLATFORM_ASSEMBLIES",
@@ -110,6 +107,9 @@ index 8805ab6..a35a8d8 100644
 +
 +	void *coreclr_handle = nullptr;
 +	unsigned int domain_id = 0;
++	String executable_path = OS::get_singleton()->get_executable_path();
++	ERR_FAIL_COND_V_MSG(executable_path.is_empty(), nullptr, ".NET: iOS editor executable path is unavailable");
++	CharString executable_path_utf8 = executable_path.utf8();
 +	int rc = coreclr_initialize(executable_path_utf8.get_data(), "GodotEditor", (int)(sizeof(property_keys) / sizeof(property_keys[0])), property_keys, property_values, &coreclr_handle, &domain_id);
 +	ERR_FAIL_COND_V_MSG(rc != 0, nullptr, ".NET: Failed to initialize CoreCLR on iOS editor");
 +
