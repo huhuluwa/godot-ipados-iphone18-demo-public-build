@@ -52,7 +52,7 @@ index 8805ab6..25f5cd7 100644
  
  	if (coreclr_path.is_empty()) {
  		return false;
-@@ -608,6 +616,77 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
+@@ -608,6 +616,81 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
  }
  #endif
  
