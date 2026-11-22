@@ -59,7 +59,7 @@ workflows:
             metal=yes vulkan=no opengl3=no \
             tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
             2>&1 | tee "$CM_BUILD_DIR/godot-scons.log"
-          test -f bin/godot_ios_editor.zip
+          test -f bin/godot_ios_xcode.zip
       - name: Generate official Mono glue with host editor
         script: |
           set -euo pipefail
@@ -120,7 +120,7 @@ workflows:
         script: |
           set -euo pipefail
           python3 "$CM_BUILD_DIR/scripts/package_ios_editor.py" \
-            "$CM_BUILD_DIR/godot-engine/bin/godot_ios_editor.zip" \
+            "$CM_BUILD_DIR/godot-engine/bin/godot_ios_xcode.zip" \
             "$CM_BUILD_DIR/ios-editor-xcode" \
             "$CM_BUILD_DIR/godot-engine/bin"
           test -f "$CM_BUILD_DIR/ios-editor-xcode/godot_apple_embedded.xcodeproj/project.pbxproj"
