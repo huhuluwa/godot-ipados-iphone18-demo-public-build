@@ -1,0 +1,50 @@
+diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
+--- a/modules/mono/mono_gd/gd_mono.cpp
++++ b/modules/mono/mono_gd/gd_mono.cpp
+@@ -759,11 +759,18 @@ void GDMono::initialize() {
+ 	}
+ #endif
+ 
++#if defined(APPLE_EMBEDDED_ENABLED)
++	if (load_coreclr(coreclr_dll_handle)) {
++		godot_plugins_initialize = initialize_coreclr_and_godot_plugins_for_editor(runtime_initialized);
++	}
++	if (godot_plugins_initialize == nullptr) {
++		ERR_FAIL_MSG(".NET: Failed to load CoreCLR for iOS editor");
++	}
++#elif !defined(TOOLS_ENABLED)
+ 	if (load_hostfxr(hostfxr_dll_handle)) {
+ 		godot_plugins_initialize = initialize_hostfxr_and_godot_plugins(runtime_initialized);
+ 		ERR_FAIL_NULL(godot_plugins_initialize);
+ 	} else {
+-#if !defined(TOOLS_ENABLED)
+ 		if (load_coreclr(coreclr_dll_handle)) {
+ 			godot_plugins_initialize = initialize_coreclr_and_godot_plugins(runtime_initialized);
+ 		} else {
+@@ -777,20 +784,18 @@ void GDMono::initialize() {
+ 		if (godot_plugins_initialize == nullptr) {
+ 			ERR_FAIL_MSG(".NET: Failed to load hostfxr");
+ 		}
+-#elif defined(APPLE_EMBEDDED_ENABLED)
+-		if (load_coreclr(coreclr_dll_handle)) {
+-			godot_plugins_initialize = initialize_coreclr_and_godot_plugins_for_editor(runtime_initialized);
+-		}
+-		if (godot_plugins_initialize == nullptr) {
+-			ERR_FAIL_MSG(".NET: Failed to load CoreCLR for iOS editor");
+-		}
++	}
+ #else
++	if (load_hostfxr(hostfxr_dll_handle)) {
++		godot_plugins_initialize = initialize_hostfxr_and_godot_plugins(runtime_initialized);
++		ERR_FAIL_NULL(godot_plugins_initialize);
++	} else {
+ 
+ 		// Show a message box to the user to make the problem explicit (and explain a potential crash).
+ 		OS::get_singleton()->alert(TTR("Unable to load .NET runtime, specifically hostfxr.\nAttempting to create/edit a project will lead to a crash.\n\nPlease install the .NET SDK 8.0 or later from https://get.dot.net and restart Godot."), TTR("Failed to load .NET runtime"));
+ 		ERR_FAIL_MSG(".NET: Failed to load hostfxr");
+-#endif
+ 	}
++#endif
+ 
+ 	int32_t interop_funcs_size = 0;
+ 	const void **interop_funcs = godotsharp::get_runtime_interop_funcs(interop_funcs_size);
