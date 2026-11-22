@@ -48,7 +48,7 @@ workflows:
             metal=yes vulkan=no opengl3=no \
             tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
             2>&1 | tee "$CM_BUILD_DIR/godot-macos-host-scons.log"
-          MACOS_GODOT="$CM_BUILD_DIR/godot-engine/bin/godot.macos.editor.arm64"
+          MACOS_GODOT="$CM_BUILD_DIR/godot-engine/bin/godot.macos.editor.arm64.mono"
           test -x "$MACOS_GODOT"
           "$MACOS_GODOT" --headless --editor \
             --generate-mono-glue "$CM_BUILD_DIR/godot-engine/modules/mono/glue" \
