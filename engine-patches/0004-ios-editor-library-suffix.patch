@@ -1,0 +1,37 @@
+diff --git a/platform_methods.py b/platform_methods.py
+index 7a702c0..f71b5e6 100644
+--- a/platform_methods.py
++++ b/platform_methods.py
+@@ -182,12 +182,28 @@ def lipo_and_copy_apple_embedded(
+     # env.extra_suffix contains ".simulator" when building for simulator,
+     # but it's undesired when calling lipo()
+     extra_suffix = env.extra_suffix.replace(".simulator", "")
+-    rel_target_bin = lipo(bin_dir + "/libgodot" + module_prefix + "." + rel_prefix, extra_suffix + ".a")
+-    dbg_target_bin = lipo(bin_dir + "/libgodot" + module_prefix + "." + dbg_prefix, extra_suffix + ".a")
+-    rel_target_bin_sim = lipo(
++    # Editor builds can add a module-specific suffix to the static library
++    # filename. If the exact template name is absent, use the single library
++    # produced for the requested target while preserving the Xcode bundle name.
++    from pathlib import Path
++
++    def find_target(prefix, suffix):
++        target_bin = lipo(prefix, suffix)
++        if target_bin:
++            return target_bin
++        candidates = sorted(Path(bin_dir).glob(Path(prefix).name + ".*" + suffix))
++        return str(candidates[0]) if candidates else ""
++
++    rel_target_bin = find_target(
++        bin_dir + "/libgodot" + module_prefix + "." + rel_prefix, extra_suffix + ".a"
++    )
++    dbg_target_bin = find_target(
++        bin_dir + "/libgodot" + module_prefix + "." + dbg_prefix, extra_suffix + ".a"
++    )
++    rel_target_bin_sim = find_target(
+         bin_dir + "/libgodot" + module_prefix + "." + rel_prefix, ".simulator" + extra_suffix + ".a"
+     )
+-    dbg_target_bin_sim = lipo(
++    dbg_target_bin_sim = find_target(
+         bin_dir + "/libgodot" + module_prefix + "." + dbg_prefix, ".simulator" + extra_suffix + ".a"
+     )
+     # Assemble Xcode project bundle.
