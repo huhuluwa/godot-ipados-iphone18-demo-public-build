@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 def replace_template(root: Path) -> None:
+    managed_root = root / "GodotEditor" / "GodotSharp"
     cpp_code = (
         "void godot_apple_embedded_plugins_initialize() {}\n"
         "void godot_apple_embedded_plugins_deinitialize() {}\n"
@@ -109,6 +110,8 @@ def replace_template(root: Path) -> None:
     for path in root.rglob("*"):
         if not path.is_file() or path.suffix in {".png", ".xcassets"}:
             continue
+        if managed_root in path.parents:
+            continue
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -129,6 +132,8 @@ def replace_template(root: Path) -> None:
     leftovers = []
     for path in root.rglob("*"):
         if not path.is_file():
+            continue
+        if managed_root in path.parents:
             continue
         try:
             text = path.read_text(encoding="utf-8")
