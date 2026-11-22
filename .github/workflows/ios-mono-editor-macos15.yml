@@ -1,0 +1,225 @@
+name: Godot Mono iOS editor macOS 15 build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ios-mono-editor:
+    name: Build unsigned Godot 4.7.2 iOS/iPadOS editor with Mono
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Fetch and patch official Godot 4.7.2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK_DIR="$RUNNER_TEMP/godot-ios-editor"
+          ENGINE_DIR="$WORK_DIR/godot-engine"
+          mkdir -p "$WORK_DIR"
+          curl --fail --location --retry 5 --retry-delay 3 \
+            https://codeload.github.com/godotengine/godot/tar.gz/refs/tags/4.7.2-stable \
+            --output "$WORK_DIR/godot-4.7.2-stable.tar.gz"
+          tar -xzf "$WORK_DIR/godot-4.7.2-stable.tar.gz" -C "$WORK_DIR"
+          mv "$WORK_DIR/godot-4.7.2-stable" "$ENGINE_DIR"
+          git init -q "$ENGINE_DIR"
+          git -C "$ENGINE_DIR" add \
+            drivers/apple_embedded/app_delegate_service.mm \
+            drivers/apple_embedded/os_apple_embedded.h \
+            drivers/apple_embedded/os_apple_embedded.mm \
+            editor/project_manager/project_manager.cpp \
+            editor/run/editor_run.cpp \
+            platform/ios/main_ios.mm \
+            platform_methods.py \
+            modules/mono/build_scripts/mono_configure.py \
+            modules/mono/mono_gd/gd_mono.cpp
+          for patch in engine-patches/*.patch; do
+            git -C "$ENGINE_DIR" apply --index --check "$GITHUB_WORKSPACE/$patch"
+            git -C "$ENGINE_DIR" apply --index "$GITHUB_WORKSPACE/$patch"
+          done
+          python3 - "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py" <<'PY'
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = '        if env["platform"] == "ios":\n            return\n'
+          if marker not in text:
+              needle = '    if env.editor_build:\n'
+              if needle not in text:
+                  raise SystemExit("iOS Mono editor guard insertion point not found")
+              path.write_text(text.replace(needle, needle + marker, 1))
+          PY
+          grep -n -A8 'iossimulator-arm64' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
+          grep -n 'coreclr_set_error_writer' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
+          echo "ENGINE_DIR=$ENGINE_DIR" >> "$GITHUB_ENV"
+
+      - name: Install SCons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --upgrade scons
+          USER_BASE="$(python3 -c 'import site; print(site.getuserbase())')"
+          echo "$USER_BASE/bin" >> "$GITHUB_PATH"
+          "$USER_BASE/bin/scons" --version
+
+      - name: Build iOS editor library and Apple Embedded bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ENGINE_DIR"
+          scons --jobs="$(sysctl -n hw.ncpu)" \
+            platform=ios target=editor arch=arm64 generate_bundle=yes \
+            metal=yes vulkan=no opengl3=no tests=no \
+            module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
+            2>&1 | tee "$RUNNER_TEMP/godot-scons.log"
+          BUNDLE_PATH=$(find bin -maxdepth 1 -type f -name 'godot_ios*.zip' -print -quit)
+          test -n "$BUNDLE_PATH"
+          echo "IOS_EDITOR_BUNDLE=$ENGINE_DIR/$BUNDLE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build host editor and generate official Mono glue
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ENGINE_DIR"
+          scons --jobs="$(sysctl -n hw.ncpu)" \
+            platform=macos target=editor arch=arm64 \
+            metal=yes vulkan=no opengl3=no tests=no \
+            module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
+            2>&1 | tee "$RUNNER_TEMP/godot-macos-host-scons.log"
+          MACOS_GODOT="$ENGINE_DIR/bin/godot.macos.editor.arm64.mono"
+          test -x "$MACOS_GODOT"
+          "$MACOS_GODOT" --headless --editor \
+            --generate-mono-glue "$ENGINE_DIR/modules/mono/glue" \
+            2>&1 | tee "$RUNNER_TEMP/godot-mono-glue.log"
+          test -f "$ENGINE_DIR/modules/mono/glue/GodotSharp/GodotSharp/Generated/GeneratedIncludes.props"
+
+      - name: Build official Godot .NET assemblies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ENGINE_DIR"
+          DOTNET_DIR="$RUNNER_TEMP/dotnet"
+          curl --fail --location --silent --show-error \
+            https://dot.net/v1/dotnet-install.sh --output "$RUNNER_TEMP/dotnet-install.sh"
+          DOTNET_ARCH=$(uname -m)
+          bash "$RUNNER_TEMP/dotnet-install.sh" --channel 8.0 --quality ga \
+            --architecture "$DOTNET_ARCH" --install-dir "$DOTNET_DIR" --no-path
+          echo "$DOTNET_DIR" >> "$GITHUB_PATH"
+          "$DOTNET_DIR/dotnet" --info | tee "$RUNNER_TEMP/dotnet-info.log"
+          python3 modules/mono/build_scripts/build_assemblies.py \
+            --godot-output-dir bin --godot-platform ios \
+            2>&1 | tee "$RUNNER_TEMP/godot-dotnet-build.log"
+          test -f bin/GodotSharp/Api/Debug/GodotSharp.dll
+          test -f bin/GodotSharp/Api/Debug/GodotSharpEditor.dll
+          test -f bin/GodotSharp/Api/Debug/GodotPlugins.dll
+          test -f bin/GodotSharp/Tools/GodotTools.dll
+
+      - name: Download .NET 11 iOS CoreCLR runtime pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUNTIME_VERSION=11.0.0
+          RUNTIME_URL="https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.ios-arm64/${RUNTIME_VERSION}/microsoft.netcore.app.runtime.ios-arm64.${RUNTIME_VERSION}.nupkg"
+          curl --fail --location --silent --show-error "$RUNTIME_URL" --output "$RUNNER_TEMP/ios-runtime.nupkg"
+          unzip -q "$RUNNER_TEMP/ios-runtime.nupkg" -d "$RUNNER_TEMP/ios-runtime"
+          RUNTIME_ROOT="$RUNNER_TEMP/ios-runtime/runtimes/ios-arm64"
+          test -f "$RUNTIME_ROOT/native/libcoreclr.dylib"
+          test -f "$RUNTIME_ROOT/lib/net11.0/System.Private.CoreLib.dll"
+          echo "IOS_RUNTIME_ROOT=$RUNTIME_ROOT" >> "$GITHUB_ENV"
+
+      - name: Package and archive unsigned iOS editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ios-editor-xcode" "$RUNNER_TEMP/build"
+          python3 "$GITHUB_WORKSPACE/scripts/package_ios_editor.py" \
+            "$IOS_EDITOR_BUNDLE" "$RUNNER_TEMP/ios-editor-xcode" "$ENGINE_DIR/bin"
+          xcodebuild -project "$RUNNER_TEMP/ios-editor-xcode/godot_apple_embedded.xcodeproj" \
+            -scheme GodotEditor -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -archivePath "$RUNNER_TEMP/build/GodotEditor.xcarchive" archive \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-editor.log"
+          APP=$(find "$RUNNER_TEMP/build/GodotEditor.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP"
+          rm -rf "$APP/GodotSharp"
+          cp -R "$ENGINE_DIR/bin/GodotSharp" "$APP/GodotSharp"
+          mkdir -p "$APP/Frameworks"
+          cp "$IOS_RUNTIME_ROOT/native/"*.dylib "$APP/Frameworks/"
+          cp "$IOS_RUNTIME_ROOT/lib/net11.0/"*.dll "$APP/GodotSharp/Api/Debug/"
+          cp "$IOS_RUNTIME_ROOT/lib/net11.0/Microsoft.NETCore.App.deps.json" "$APP/GodotSharp/Api/Debug/"
+          cp "$IOS_RUNTIME_ROOT/lib/net11.0/Microsoft.NETCore.App.runtimeconfig.json" "$APP/GodotSharp/Api/Debug/"
+          test -f "$APP/Frameworks/libcoreclr.dylib"
+          test -f "$APP/GodotSharp/Api/Debug/GodotPlugins.dll"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/Godot-4.7.2-iPadOS-editor-unsigned-macos15.ipa" Payload)
+          python3 "$GITHUB_WORKSPACE/scripts/verify_ios_editor_ipa.py" \
+            "$GITHUB_WORKSPACE/Godot-4.7.2-iPadOS-editor-unsigned-macos15.ipa" \
+            | tee "$RUNNER_TEMP/ios-editor-ipa-verification.log"
+
+      - name: Build and launch iOS Simulator editor with Mono
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ENGINE_DIR"
+          scons --jobs="$(sysctl -n hw.ncpu)" \
+            platform=ios target=editor arch=arm64 simulator=yes generate_bundle=yes \
+            metal=no vulkan=no opengl3=yes tests=no \
+            module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
+            2>&1 | tee "$RUNNER_TEMP/godot-scons-simulator.log"
+          SIM_BUNDLE=$(find bin -maxdepth 1 -type f -name 'godot_ios*.zip' -print -quit)
+          test -n "$SIM_BUNDLE"
+          curl --fail --location --silent --show-error \
+            https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.iossimulator-arm64/11.0.0/microsoft.netcore.app.runtime.iossimulator-arm64.11.0.0.nupkg \
+            --output "$RUNNER_TEMP/ios-sim-runtime.nupkg"
+          unzip -q "$RUNNER_TEMP/ios-sim-runtime.nupkg" -d "$RUNNER_TEMP/ios-sim-runtime"
+          SIM_RUNTIME_ROOT="$RUNNER_TEMP/ios-sim-runtime/runtimes/iossimulator-arm64"
+          SIM_XCODE="$RUNNER_TEMP/ios-sim-xcode"
+          python3 "$GITHUB_WORKSPACE/scripts/package_ios_editor.py" \
+            "$ENGINE_DIR/$SIM_BUNDLE" "$SIM_XCODE" "$ENGINE_DIR/bin" simulator
+          SIM_DERIVED="$RUNNER_TEMP/simulator-derived"
+          xcodebuild -project "$SIM_XCODE/godot_apple_embedded.xcodeproj" \
+            -scheme GodotEditor -configuration Release -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -derivedDataPath "$SIM_DERIVED" build \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-editor-simulator.log"
+          SIM_APP=$(find "$SIM_DERIVED/Build/Products" -maxdepth 3 -name GodotEditor.app -print -quit)
+          test -n "$SIM_APP"
+          rm -rf "$SIM_APP/GodotSharp"
+          cp -R "$ENGINE_DIR/bin/GodotSharp" "$SIM_APP/GodotSharp"
+          mkdir -p "$SIM_APP/Frameworks"
+          cp "$SIM_RUNTIME_ROOT/native/"*.dylib "$SIM_APP/Frameworks/"
+          cp "$SIM_RUNTIME_ROOT/lib/net11.0/"*.dll "$SIM_APP/GodotSharp/Api/Debug/"
+          cp "$SIM_RUNTIME_ROOT/lib/net11.0/Microsoft.NETCore.App.deps.json" "$SIM_APP/GodotSharp/Api/Debug/"
+          cp "$SIM_RUNTIME_ROOT/lib/net11.0/Microsoft.NETCore.App.runtimeconfig.json" "$SIM_APP/GodotSharp/Api/Debug/"
+          SIM_UDID=$(xcrun simctl list devices available | awk -F '[()]' '/iPad/ {print $2; exit} /iPhone/ {print $2; exit}')
+          test -n "$SIM_UDID"
+          xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl install "$SIM_UDID" "$SIM_APP"
+          set +e
+          xcrun simctl launch --console "$SIM_UDID" org.godotengine.GodotEditor --editor --verbose >"$RUNNER_TEMP/simulator-launch.log" 2>&1 &
+          PID=$!
+          sleep 25
+          kill "$PID" 2>/dev/null || true
+          set -e
+          xcrun simctl spawn "$SIM_UDID" log show --last 45s --style compact \
+            --predicate 'process == "GodotEditor"' | tee "$RUNNER_TEMP/simulator-log-show.log"
+          grep -E 'CoreCLR initialized for iOS editor|GodotPlugins initialized' \
+            "$RUNNER_TEMP/simulator-launch.log" "$RUNNER_TEMP/simulator-log-show.log"
+
+      - name: Upload full build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-4.7.2-ios-mono-editor-macos15
+          path: |
+            Godot-4.7.2-iPadOS-editor-unsigned-macos15.ipa
+            ${{ runner.temp }}/godot-ios-editor/*.log
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/build/GodotEditor.xcarchive
+          if-no-files-found: warn
