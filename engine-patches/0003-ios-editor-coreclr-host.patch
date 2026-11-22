@@ -88,6 +88,9 @@ index 8805ab6..a35a8d8 100644
 +	CharString managed_root_utf8 = managed_root.utf8();
 +	CharString native_root_utf8 = native_root.utf8();
 +	CharString trusted_platform_assemblies_utf8 = trusted_platform_assemblies.utf8();
++	String executable_path = OS::get_singleton()->get_executable_path();
++	ERR_FAIL_COND_V_MSG(executable_path.is_empty(), nullptr, ".NET: iOS editor executable path is unavailable");
++	CharString executable_path_utf8 = executable_path.utf8();
 +	const char *property_keys[] = {
 +		"APP_PATHS",
 +		"TRUSTED_PLATFORM_ASSEMBLIES",
@@ -107,7 +110,7 @@ index 8805ab6..a35a8d8 100644
 +
 +	void *coreclr_handle = nullptr;
 +	unsigned int domain_id = 0;
-+	int rc = coreclr_initialize(nullptr, "GodotEditor", (int)(sizeof(property_keys) / sizeof(property_keys[0])), property_keys, property_values, &coreclr_handle, &domain_id);
++	int rc = coreclr_initialize(executable_path_utf8.get_data(), "GodotEditor", (int)(sizeof(property_keys) / sizeof(property_keys[0])), property_keys, property_values, &coreclr_handle, &domain_id);
 +	ERR_FAIL_COND_V_MSG(rc != 0, nullptr, ".NET: Failed to initialize CoreCLR on iOS editor");
 +
 +	r_runtime_initialized = true;
