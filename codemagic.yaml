@@ -42,6 +42,20 @@ workflows:
               path.write_text(text)
           PY
           grep -n -A5 'if env.editor_build:' "$ENGINE_DIR/modules/mono/build_scripts/mono_configure.py"
+          python3 - "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp" <<'PY'
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          marker = '#if defined(IOS_SIMULATOR)\n\t\t"iossimulator-arm64",\n#else\n\t\t"ios-arm64",\n#endif'
+          if marker not in text:
+              needle = '\t\t"ios-arm64",\n'
+              if needle not in text:
+                  raise SystemExit("iOS CoreCLR RID insertion point not found")
+              text = text.replace(needle, marker + '\n', 1)
+              path.write_text(text)
+          PY
+          grep -n -A8 'iossimulator-arm64' "$ENGINE_DIR/modules/mono/mono_gd/gd_mono.cpp"
       - name: Install SCons
         script: |
           set -euo pipefail
@@ -174,6 +188,88 @@ workflows:
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
             "$CM_BUILD_DIR/build/unsigned-ipa/Payload" \
             "$CM_BUILD_DIR/build/Godot-4.7.2-iPadOS-editor-unsigned.ipa"
+      - name: Build iOS Simulator editor bundle
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/godot-engine"
+          scons --jobs="$(sysctl -n hw.ncpu)" \
+            platform=ios target=editor arch=arm64 simulator=yes \
+            generate_bundle=yes \
+            metal=no vulkan=no opengl3=yes \
+            tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
+            2>&1 | tee "$CM_BUILD_DIR/godot-scons-simulator.log"
+          SIM_BUNDLE_PATH=$(find bin -maxdepth 1 -type f -name 'godot_ios*.zip' -print -quit)
+          test -n "$SIM_BUNDLE_PATH"
+          printf '%s\n' "$SIM_BUNDLE_PATH" | tee "$CM_BUILD_DIR/ios-editor-simulator-bundle-path.txt"
+      - name: Download .NET 11 iOS Simulator CoreCLR runtime pack
+        script: |
+          set -euo pipefail
+          RUNTIME_VERSION="11.0.0"
+          RUNTIME_URL="https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.iossimulator-arm64/${RUNTIME_VERSION}/microsoft.netcore.app.runtime.iossimulator-arm64.${RUNTIME_VERSION}.nupkg"
+          RUNTIME_ARCHIVE="$CM_BUILD_DIR/microsoft.netcore.app.runtime.iossimulator-arm64.nupkg"
+          curl --fail --location --silent --show-error "$RUNTIME_URL" --output "$RUNTIME_ARCHIVE"
+          rm -rf "$CM_BUILD_DIR/dotnet-ios-sim-runtime"
+          mkdir -p "$CM_BUILD_DIR/dotnet-ios-sim-runtime"
+          unzip -q "$RUNTIME_ARCHIVE" -d "$CM_BUILD_DIR/dotnet-ios-sim-runtime"
+          SIM_RUNTIME_ROOT="$CM_BUILD_DIR/dotnet-ios-sim-runtime/runtimes/iossimulator-arm64"
+          test -f "$SIM_RUNTIME_ROOT/native/libcoreclr.dylib"
+          test -f "$SIM_RUNTIME_ROOT/lib/net11.0/System.Private.CoreLib.dll"
+          echo "DOTNET_IOS_SIM_RUNTIME_ROOT=$SIM_RUNTIME_ROOT" >> "$CM_ENV"
+          find "$SIM_RUNTIME_ROOT" -maxdepth 3 -type f | sort | tee "$CM_BUILD_DIR/dotnet-ios-sim-runtime-files.log"
+      - name: Prepare and build unsigned iOS Simulator editor app
+        script: |
+          set -euo pipefail
+          SIM_BUNDLE_PATH=$(cat "$CM_BUILD_DIR/ios-editor-simulator-bundle-path.txt")
+          test -f "$CM_BUILD_DIR/godot-engine/$SIM_BUNDLE_PATH"
+          python3 "$CM_BUILD_DIR/scripts/package_ios_editor.py" \
+            "$CM_BUILD_DIR/godot-engine/$SIM_BUNDLE_PATH" \
+            "$CM_BUILD_DIR/ios-editor-sim-xcode" \
+            "$CM_BUILD_DIR/godot-engine/bin" \
+            simulator
+          test -f "$CM_BUILD_DIR/ios-editor-sim-xcode/GodotEditor.xcframework/ios-arm64_x86_64-simulator/libgodot.a"
+          SIM_DERIVED="$CM_BUILD_DIR/simulator-derived"
+          xcodebuild \
+            -project "$CM_BUILD_DIR/ios-editor-sim-xcode/godot_apple_embedded.xcodeproj" \
+            -scheme GodotEditor \
+            -configuration Release \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -derivedDataPath "$SIM_DERIVED" build \
+            2>&1 | tee "$CM_BUILD_DIR/xcodebuild-editor-simulator.log"
+          SIM_APP=$(find "$SIM_DERIVED/Build/Products" -maxdepth 3 -name 'GodotEditor.app' -print -quit)
+          test -n "$SIM_APP"
+          SIM_MANAGED_SOURCE="$CM_BUILD_DIR/godot-engine/bin/GodotSharp"
+          test -d "$SIM_MANAGED_SOURCE"
+          rm -rf "$SIM_APP/GodotSharp"
+          cp -R "$SIM_MANAGED_SOURCE" "$SIM_APP/GodotSharp"
+          SIM_RUNTIME_ROOT="$DOTNET_IOS_SIM_RUNTIME_ROOT"
+          mkdir -p "$SIM_APP/Frameworks"
+          cp "$SIM_RUNTIME_ROOT/native/"*.dylib "$SIM_APP/Frameworks/"
+          cp "$SIM_RUNTIME_ROOT/lib/net11.0/"*.dll "$SIM_APP/GodotSharp/Api/Debug/"
+          cp "$SIM_RUNTIME_ROOT/lib/net11.0/Microsoft.NETCore.App.deps.json" "$SIM_APP/GodotSharp/Api/Debug/"
+          cp "$SIM_RUNTIME_ROOT/lib/net11.0/Microsoft.NETCore.App.runtimeconfig.json" "$SIM_APP/GodotSharp/Api/Debug/"
+          test -f "$SIM_APP/Frameworks/libcoreclr.dylib"
+          test -f "$SIM_APP/Frameworks/libclrjit.dylib"
+          test -f "$SIM_APP/GodotSharp/Api/Debug/System.Private.CoreLib.dll"
+          SIM_UDID=$(xcrun simctl list devices available | awk -F '[()]' '/iPad/ {print $2; exit} /iPhone/ {print $2; exit}')
+          test -n "$SIM_UDID"
+          printf '%s\n' "$SIM_UDID" | tee "$CM_BUILD_DIR/ios-simulator-udid.txt"
+          xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl install "$SIM_UDID" "$SIM_APP"
+          set +e
+          xcrun simctl launch --console "$SIM_UDID" org.godotengine.GodotEditor --editor --verbose \
+            >"$CM_BUILD_DIR/simulator-launch.log" 2>&1 &
+          LAUNCH_PID=$!
+          sleep 25
+          kill "$LAUNCH_PID" 2>/dev/null || true
+          set -e
+          xcrun simctl spawn "$SIM_UDID" log show --last 45s --style compact \
+            --predicate 'process == "GodotEditor"' \
+            | tee "$CM_BUILD_DIR/simulator-log-show.log"
+          cat "$CM_BUILD_DIR/simulator-launch.log"
+          grep -E 'CoreCLR initialized for iOS editor|GodotPlugins initialized' \
+            "$CM_BUILD_DIR/simulator-launch.log" "$CM_BUILD_DIR/simulator-log-show.log"
       - name: Verify editor IPA contents
         script: |
           set -euo pipefail
@@ -194,6 +290,13 @@ workflows:
       - dotnet-ios-runtime-files.log
       - xcodebuild-editor.log
       - ios-editor-ipa-verification.log
+      - ios-editor-simulator-bundle-path.txt
+      - godot-scons-simulator.log
+      - dotnet-ios-sim-runtime-files.log
+      - xcodebuild-editor-simulator.log
+      - ios-simulator-udid.txt
+      - simulator-launch.log
+      - simulator-log-show.log
     publishing:
       email:
         recipients:

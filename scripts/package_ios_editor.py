@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 
-def replace_template(root: Path) -> None:
+def replace_template(root: Path, simulator: bool = False) -> None:
     managed_root = root / "GodotEditor" / "GodotSharp"
     cpp_code = (
         "void godot_apple_embedded_plugins_initialize() {}\n"
@@ -38,7 +38,7 @@ def replace_template(root: Path) -> None:
         "$code_sign_style_release": "Manual",
         "$godot_archs": "arm64",
         "$valid_archs": "arm64",
-        "$sdkroot": "iphoneos",
+        "$sdkroot": "iphonesimulator" if simulator else "iphoneos",
         "$os_deployment_target": "IPHONEOS_DEPLOYMENT_TARGET = 14.0;",
         "$targeted_device_family": "1,2",
         "$linker_flags": "",
@@ -189,8 +189,8 @@ def copy_managed_editor_payload(root: Path, godot_output_dir: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) not in {3, 4}:
-        print(f"usage: {sys.argv[0]} TEMPLATE.zip OUTPUT_DIR [GODOT_OUTPUT_DIR]", file=sys.stderr)
+    if len(sys.argv) not in {3, 4, 5}:
+        print(f"usage: {sys.argv[0]} TEMPLATE.zip OUTPUT_DIR [GODOT_OUTPUT_DIR] [simulator]", file=sys.stderr)
         return 2
     template_zip = Path(sys.argv[1]).resolve()
     output_dir = Path(sys.argv[2]).resolve()
@@ -205,7 +205,10 @@ def main() -> int:
     rename_editor_app_directory(output_dir)
     if len(sys.argv) == 4:
         copy_managed_editor_payload(output_dir, Path(sys.argv[3]).resolve())
-    replace_template(output_dir)
+    simulator = len(sys.argv) == 5
+    if simulator and sys.argv[4] != "simulator":
+        raise ValueError("fourth argument must be 'simulator'")
+    replace_template(output_dir, simulator=simulator)
     pck = output_dir / "GodotEditor.pck"
     pck.touch()
     print(f"Prepared {output_dir}")
