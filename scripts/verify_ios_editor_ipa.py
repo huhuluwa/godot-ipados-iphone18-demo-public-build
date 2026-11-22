@@ -37,6 +37,14 @@ REQUIRED_MANAGED_FILES = (
     "GodotSharp/Api/Debug/GodotPlugins.dll",
     "GodotSharp/Api/Debug/GodotPlugins.runtimeconfig.json",
     "GodotSharp/Tools/GodotTools.dll",
+    "GodotSharp/Api/Debug/System.Private.CoreLib.dll",
+    "GodotSharp/Api/Debug/Microsoft.NETCore.App.deps.json",
+    "GodotSharp/Api/Debug/Microsoft.NETCore.App.runtimeconfig.json",
+)
+
+REQUIRED_CORECLR_FILES = (
+    "Frameworks/libcoreclr.dylib",
+    "Frameworks/libclrjit.dylib",
 )
 
 
@@ -71,6 +79,9 @@ def verify(ipa_path: Path) -> dict[str, object]:
         missing_managed = [f for f in REQUIRED_MANAGED_FILES if f"{app}/{f}" not in names]
         if missing_managed:
             raise RuntimeError(f"managed editor payload missing: {', '.join(missing_managed)}")
+        missing_coreclr = [f for f in REQUIRED_CORECLR_FILES if f"{app}/{f}" not in names]
+        if missing_coreclr:
+            raise RuntimeError(f"CoreCLR runtime payload missing: {', '.join(missing_coreclr)}")
 
         return {
             "bundle_identifier": info.get("CFBundleIdentifier"),
@@ -81,6 +92,7 @@ def verify(ipa_path: Path) -> dict[str, object]:
             "editor_symbols": list(REQUIRED_SYMBOLS),
             "ios_features": IOS_FEATURE_SYMBOLS,
             "managed_files": list(REQUIRED_MANAGED_FILES),
+            "coreclr_files": list(REQUIRED_CORECLR_FILES),
             "signed": False,
         }
 

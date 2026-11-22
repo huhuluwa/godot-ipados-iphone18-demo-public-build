@@ -1,0 +1,132 @@
+diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
+index 8805ab6..79b977b 100644
+--- a/modules/mono/mono_gd/gd_mono.cpp
++++ b/modules/mono/mono_gd/gd_mono.cpp
+@@ -71,7 +71,7 @@ hostfxr_initialize_for_runtime_config_fn hostfxr_initialize_for_runtime_config =
+ hostfxr_get_runtime_delegate_fn hostfxr_get_runtime_delegate = nullptr;
+ hostfxr_close_fn hostfxr_close = nullptr;
+ 
+-#ifndef TOOLS_ENABLED
++#if !defined(TOOLS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+ typedef int(CORECLR_DELEGATE_CALLTYPE *coreclr_create_delegate_fn)(void *hostHandle, unsigned int domainId, const char *entryPointAssemblyName, const char *entryPointTypeName, const char *entryPointMethodName, void **delegate);
+ typedef int(CORECLR_DELEGATE_CALLTYPE *coreclr_initialize_fn)(const char *exePath, const char *appDomainFriendlyName, int propertyCount, const char **propertyKeys, const char **propertyValues, void **hostHandle, unsigned int *domainId);
+ 
+@@ -235,7 +235,9 @@ String find_monosgen() {
+ 	return String();
+ #endif
+ }
++#endif
+ 
++#if !defined(TOOLS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+ String find_coreclr() {
+ #if defined(WINDOWS_ENABLED)
+ 	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
+@@ -243,6 +245,10 @@ String find_coreclr() {
+ #elif defined(MACOS_ENABLED)
+ 	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
+ 								.path_join("libcoreclr.dylib");
++#elif defined(APPLE_EMBEDDED_ENABLED)
++	String probe_path = OS::get_singleton()->get_executable_path().get_base_dir()
++							.path_join("Frameworks")
++							.path_join("libcoreclr.dylib");
+ #elif defined(UNIX_ENABLED)
+ 	String probe_path = GodotSharpDirs::get_api_assemblies_dir()
+ 								.path_join("libcoreclr.so");
+@@ -298,7 +304,7 @@ bool load_hostfxr(void *&r_hostfxr_dll_handle) {
+ 			hostfxr_close);
+ }
+ 
+-#ifndef TOOLS_ENABLED
++#if !defined(TOOLS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+ bool load_coreclr(void *&r_coreclr_dll_handle) {
+ 	String coreclr_path = find_coreclr();
+ 
+@@ -608,6 +614,74 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
+ }
+ #endif
+ 
++#if defined(TOOLS_ENABLED) && defined(APPLE_EMBEDDED_ENABLED)
++godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins_for_editor(bool &r_runtime_initialized) {
++	godot_plugins_initialize_fn godot_plugins_initialize = nullptr;
++
++	const String managed_root = GodotSharpDirs::get_api_assemblies_dir();
++	const String native_root = OS::get_singleton()->get_executable_path().get_base_dir().path_join("Frameworks");
++	Ref<DirAccess> dir = DirAccess::open(managed_root);
++	ERR_FAIL_COND_V_MSG(dir.is_null(), nullptr, ".NET: Managed iOS editor directory is unavailable");
++
++	PackedStringArray managed_files;
++	dir->list_dir_begin();
++	String file_name = dir->get_next();
++	while (!file_name.is_empty()) {
++		if (!dir->current_is_dir() && file_name.ends_with(".dll")) {
++			managed_files.push_back(managed_root.path_join(file_name));
++		}
++		file_name = dir->get_next();
++	}
++	dir->list_dir_end();
++	ERR_FAIL_COND_V_MSG(managed_files.is_empty(), nullptr, ".NET: No managed iOS editor assemblies found");
++
++	String trusted_platform_assemblies;
++	for (const String &managed_file : managed_files) {
++		if (!trusted_platform_assemblies.is_empty()) {
++			trusted_platform_assemblies += ":";
++		}
++		trusted_platform_assemblies += managed_file;
++	}
++
++	CharString managed_root_utf8 = managed_root.utf8();
++	CharString native_root_utf8 = native_root.utf8();
++	CharString trusted_platform_assemblies_utf8 = trusted_platform_assemblies.utf8();
++	const char *property_keys[] = {
++		"APP_PATHS",
++		"TRUSTED_PLATFORM_ASSEMBLIES",
++		"NATIVE_DLL_SEARCH_DIRECTORIES",
++		"APP_CONTEXT_BASE_DIRECTORY",
++		"SYSTEM_CORELIB_DIRECTORY",
++		"RUNTIME_IDENTIFIER",
++	};
++	const char *property_values[] = {
++		managed_root_utf8.get_data(),
++		trusted_platform_assemblies_utf8.get_data(),
++		native_root_utf8.get_data(),
++		managed_root_utf8.get_data(),
++		managed_root_utf8.get_data(),
++		"ios-arm64",
++	};
++
++	void *coreclr_handle = nullptr;
++	unsigned int domain_id = 0;
++	int rc = coreclr_initialize(nullptr, "GodotEditor", (int)(sizeof(property_keys) / sizeof(property_keys[0])), property_keys, property_values, &coreclr_handle, &domain_id);
++	ERR_FAIL_COND_V_MSG(rc != 0, nullptr, ".NET: Failed to initialize CoreCLR on iOS editor");
++
++	r_runtime_initialized = true;
++	print_verbose(".NET: CoreCLR initialized for iOS editor");
++
++	rc = coreclr_create_delegate(coreclr_handle, domain_id,
++			"GodotPlugins",
++			"GodotPlugins.Main",
++			"InitializeFromEngine",
++			(void **)&godot_plugins_initialize);
++	ERR_FAIL_COND_V_MSG(rc != 0 || godot_plugins_initialize == nullptr, nullptr, ".NET: Failed to get GodotPlugins editor initialization function pointer");
++
++	return godot_plugins_initialize;
++}
++#endif
++
+ } // namespace
+ 
+ bool GDMono::should_initialize() {
+@@ -669,6 +743,13 @@ void GDMono::initialize() {
+ 		if (godot_plugins_initialize == nullptr) {
+ 			ERR_FAIL_MSG(".NET: Failed to load hostfxr");
+ 		}
++#elif defined(APPLE_EMBEDDED_ENABLED)
++		if (load_coreclr(coreclr_dll_handle)) {
++			godot_plugins_initialize = initialize_coreclr_and_godot_plugins_for_editor(runtime_initialized);
++		}
++		if (godot_plugins_initialize == nullptr) {
++			ERR_FAIL_MSG(".NET: Failed to load CoreCLR for iOS editor");
++		}
+ #else
+ 
+ 		// Show a message box to the user to make the problem explicit (and explain a potential crash).
