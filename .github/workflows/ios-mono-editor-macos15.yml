@@ -6,7 +6,7 @@ on:
 jobs:
   ios-mono-editor:
     name: Build unsigned Godot 4.7.2 iOS/iPadOS editor with Mono
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 90
     permissions:
       contents: read
