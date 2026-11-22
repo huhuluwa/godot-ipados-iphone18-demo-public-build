@@ -35,7 +35,7 @@ workflows:
             platform=ios target=editor arch=arm64 \
             generate_bundle=yes \
             metal=yes vulkan=no opengl3=no \
-            tests=no module_mono_enabled=no dev_build=no \
+            tests=no module_mono_enabled=no module_text_server_fb_enabled=yes dev_build=no \
             2>&1 | tee "$CM_BUILD_DIR/godot-scons.log"
           test -f bin/godot_ios_editor.zip
       - name: Prepare unsigned iOS editor Xcode project

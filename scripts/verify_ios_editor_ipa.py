@@ -23,6 +23,14 @@ REQUIRED_SYMBOLS = (
     "ScriptEditor",
 )
 
+IOS_FEATURE_SYMBOLS = {
+    "XRServer": "XR core",
+    "MobileVRInterface": "mobile VR",
+    "CameraServer": "camera module",
+    "WebRTCPeerConnection": "WebRTC module",
+    "TextServerFallback": "fallback text server",
+}
+
 
 def verify(ipa_path: Path) -> dict[str, object]:
     with zipfile.ZipFile(ipa_path) as archive:
@@ -45,6 +53,9 @@ def verify(ipa_path: Path) -> dict[str, object]:
         missing = [symbol for symbol in REQUIRED_SYMBOLS if symbol.encode() not in binary]
         if missing:
             raise RuntimeError(f"editor symbols missing: {', '.join(missing)}")
+        missing_features = [symbol for symbol in IOS_FEATURE_SYMBOLS if symbol.encode() not in binary]
+        if missing_features:
+            raise RuntimeError(f"iOS feature symbols missing: {', '.join(missing_features)}")
         if f"{app}/_CodeSignature/CodeResources" in names:
             raise RuntimeError("artifact is signed; unsigned workflow expected")
         if set(info.get("UIDeviceFamily", [])) != {1, 2}:
@@ -57,6 +68,7 @@ def verify(ipa_path: Path) -> dict[str, object]:
             "minimum_os": info.get("MinimumOSVersion"),
             "binary_bytes": len(binary),
             "editor_symbols": list(REQUIRED_SYMBOLS),
+            "ios_features": IOS_FEATURE_SYMBOLS,
             "signed": False,
         }
 
