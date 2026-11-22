@@ -39,6 +39,21 @@ workflows:
             tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
             2>&1 | tee "$CM_BUILD_DIR/godot-scons.log"
           test -f bin/godot_ios_editor.zip
+      - name: Generate official Mono glue with host editor
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/godot-engine"
+          scons --jobs="$(sysctl -n hw.ncpu)" \
+            platform=macos target=editor arch=arm64 \
+            metal=yes vulkan=no opengl3=no \
+            tests=no module_mono_enabled=yes module_text_server_fb_enabled=yes dev_build=no \
+            2>&1 | tee "$CM_BUILD_DIR/godot-macos-host-scons.log"
+          MACOS_GODOT="$CM_BUILD_DIR/godot-engine/bin/godot.macos.editor.arm64"
+          test -x "$MACOS_GODOT"
+          "$MACOS_GODOT" --headless --editor \
+            --generate-mono-glue "$CM_BUILD_DIR/godot-engine/modules/mono/glue" \
+            2>&1 | tee "$CM_BUILD_DIR/godot-mono-glue.log"
+          test -f modules/mono/glue/GodotSharp/GodotSharp/Generated/GeneratedIncludes.props
       - name: Build official Godot .NET assemblies
         script: |
           set -euo pipefail
@@ -109,6 +124,8 @@ workflows:
       - build/**/*.xcarchive
       - godot-source-revision.txt
       - godot-scons.log
+      - godot-macos-host-scons.log
+      - godot-mono-glue.log
       - xcode-project-list.log
       - dotnet-info.log
       - godot-dotnet-build.log
