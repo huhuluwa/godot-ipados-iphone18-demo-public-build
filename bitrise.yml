@@ -1,15 +1,17 @@
-format_version: '13'
+format_version: '26'
 default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 project_type: other
+
+meta:
+  bitrise.io:
+    stack: osx-xcode-latest-stable
+    machine_type_id: g2.mac.large
 
 workflows:
   primary:
     title: Godot 4.7.2 iPadOS Mono/C# unsigned editor
     description: Build the official Godot source with Mono/C# and package an unsigned iPadOS editor IPA.
     max_build_duration: 90
-    meta:
-      bitrise.io:
-        stack: osx-xcode-latest-stable
     steps:
     - script:
         title: Build unsigned Mono/C# iPadOS editor
