@@ -7,7 +7,7 @@ workflows:
       events:
         - push
       branch_patterns:
-        - pattern: main
+        - pattern: codex/macos15-full-build
           include: true
     environment:
       xcode: latest
